@@ -15,12 +15,11 @@ def compute_normal(objects, k):
     Returns:
     list: Updated objects list with the normal vector computed for the k-th object.
     """
-    normal_vector = -nmz(np.cross(objects[k][2], objects[k][3]))
+    objects[k][4] = -nmz(np.cross(objects[k][2], objects[k][3])) 
     
-    if np.linalg.norm(objects[k][1] + normal_vector) > np.linalg.norm(objects[k][1]):
-        normal_vector = -normal_vector
+    if np.linalg.norm(objects[k][1] + objects[k][4]) > np.linalg.norm(objects[k][1]):
+        objects[k][4] = -objects[k][4]
     
-    objects[k][4] = normal_vector
     return objects
 
 

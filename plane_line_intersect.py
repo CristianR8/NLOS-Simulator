@@ -36,7 +36,7 @@ def plane_line_intersect(n, V0, P0, P1):
 
     # Compute the intersection parameter
     sI = N / D
-    I = P0 + sI * u
+    I = P0 + np.dot(sI, u) 
     if sI < 0 or sI > 1:
         check = 3  # The intersection point lies outside the segment, so there is no intersection
     else:

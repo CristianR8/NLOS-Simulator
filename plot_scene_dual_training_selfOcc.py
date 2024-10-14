@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from plane_line_intersect import plane_line_intersect
 
 def nmz(x):
     """Normalize vector"""
@@ -25,7 +26,7 @@ def plot_scene_dual_training_selfOcc(laser_pos, objects, params):
 
     # Discretize
     numpatches = 0
-    for o in range(len(objects)):
+    for o in range(1, len(objects)):
         if objects[o][0] == 'wall':
             numpatches += round(np.linalg.norm(objects[o][2]) / params['wall_discr']) * round(np.linalg.norm(objects[o][3]) / params['wall_discr'])
         else:
@@ -40,13 +41,18 @@ def plot_scene_dual_training_selfOcc(laser_pos, objects, params):
     light_angle = v[0]
     patch_count = 0
 
-    for o in range(len(objects)):
+    for o in range(1, len(objects)):
         if objects[o][0] == 'wall':
             for i in np.linspace(0, 1, round(np.linalg.norm(objects[o][2]) / params['wall_discr'])):
                 for j in np.linspace(0, 1, round(np.linalg.norm(objects[o][3]) / params['wall_discr'])):
                     if objects[o][1][2] + i * objects[o][2][2] + j * objects[o][3][2] > 0:
                         pos = objects[o][1] + i * objects[o][2] + j * objects[o][3]
-
+                        pos = [
+                              objects[o][1][0] + i * objects[o][2][0] + j * objects[o][3][0],  # componente X
+                              objects[o][1][1] + i * objects[o][2][1] + j * objects[o][3][1],  # componente Y
+                              objects[o][1][2] + i * objects[o][2][2] + j * objects[o][3][2]   # componente Z
+                              ]
+    
                         oc = False
 
                         if o <= 4:
@@ -78,8 +84,8 @@ def plot_scene_dual_training_selfOcc(laser_pos, objects, params):
                                 oc = True
 
                         if not oc:
-                            scene_pixel[patch_count] = pos
-                            scene_pixel_normal[patch_count] = objects[o][4]
+                            scene_pixel[patch_count, :] = pos
+                            scene_pixel_normal[patch_count, :] = objects[o][4]
                             patch_count += 1
 
     fig = plt.figure()
