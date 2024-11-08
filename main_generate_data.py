@@ -11,6 +11,7 @@ from plot_scene_dual_training_selfOcc import plot_scene_dual_training_selfOcc
 from plane_line_intersect import plane_line_intersect
 from noise import add_sensor_noise
 from noise import add_environmental_noise
+from noise import add_shot_noise
 #from compute_normal_v2 import compute_normal_v2
 
 # SPAD Camera Params
@@ -217,14 +218,15 @@ for xx in range(len(xcoord) - 1):
 
     
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], params['num_time_bins']), order='F')
-    y_meas_vec_noisy = add_sensor_noise(y_meas_vec)
-    y_meas_vec_noisy_2 = add_environmental_noise(y_meas_vec_noisy, low=0, high=0.03)
+    y_meas_vec_noisy = add_sensor_noise(y_meas_vec, laser_intensity=laser_intensity)
+    y_meas_vec_noisy_2 = add_environmental_noise(y_meas_vec_noisy)
+    y_meas_vec_noisy_3 = add_shot_noise(y_meas_vec_noisy_2)
     
     plt.figure()
-    plt.plot(np.squeeze(y_meas_vec_noisy_2[0, 0, :]))
+    plt.plot(np.squeeze(y_meas_vec_noisy_3[0, 0, :]))
     plt.show() 
     
-    y_sum = np.sum(y_meas_vec_noisy_2, axis=2)
+    y_sum = np.sum(y_meas_vec_noisy_3, axis=2)
 
     y_sum = np.roll(y_sum, shift=1, axis=-1)
 

@@ -97,8 +97,8 @@ def plot_scene_dual_training_selfOcc(laser_pos, objects, params):
     ax.scatter(laser_pos[0], laser_pos[1], laser_pos[2], c='r', marker='o')
     ax.scatter(cam_pixel[:, 0], cam_pixel[:, 1], cam_pixel[:, 2], c='g', marker='*')
 
-    ax.view_init(elev=90, azim=0)
+    ax.view_init(elev=30, azim=-60)   
     ax.set_aspect('auto')
-    plt.grid(True)
+    #plt.grid(True)
     plt.show()
 
