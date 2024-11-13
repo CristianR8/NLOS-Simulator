@@ -1,3 +1,4 @@
+plotly
 streamlit
 numpy
 trimesh
