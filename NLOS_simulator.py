@@ -474,7 +474,7 @@ def main():
     st.sidebar.subheader("Objects selection")
 
     selected_obj_files = st.sidebar.multiselect("Select 3D Objects", obj_files)
-     
+        
     object_positions = []
     for obj_file in selected_obj_files:
         with st.sidebar.expander(f"Position for {obj_file}"):
@@ -482,12 +482,13 @@ def main():
             ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({'obj_file': obj_file, 'xcoord': xcoord, 'ycoord': ycoord, 'w': w})
-      
-    if selected_obj_files:
-        st.sidebar.checkbox("Hide All Walls", value=False, key="hide_walls")
-    else:
-        st.sidebar.write("Please select an object to enable additional options.")  
             
+    if selected_obj_files:
+        hide_walls = st.sidebar.checkbox("Hide All Walls", value=False)
+    else:
+        st.sidebar.write("Please select an object to enable additional options.")
+        hide_walls = False
+        
     # Object Size Validation
     exceeds = False
     for obj in object_positions:
@@ -534,7 +535,6 @@ def main():
             st.write(f"- **{obj1}** overlaps with **{obj2}**")
         st.stop()  # Stop the app here to prevent the simulation from running
 
-    
 
     # Run the simulation when button is clicked
     if st.sidebar.button("Run Simulation"):
