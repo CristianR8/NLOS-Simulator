@@ -16,10 +16,9 @@ c = 299792458
 
 object_folder = '/home/cristianr/NLOS-Simulator/objects/'
 
-# Room Dimensions (in meters)
-xmin, xmax = -3/2, 3/2
-ymin, ymax = 0, 3
-zmin, zmax = 0, 3
+# Room Dimensions fixed 
+ymin = 0
+zmin = 0
 
 # Function to list all .obj files in the folder
 def get_obj_files(folder):
@@ -81,7 +80,7 @@ def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spac
     
     return wall_spheres
 
-def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls): 
+def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls): 
     objects = []
     scene_objects = []
     
@@ -155,8 +154,8 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     z_start = zmin     
     z_end = zmax        
     
-    sphere_radius = 0.03 
-    spacing = 0.5          
+    sphere_radius = 0.015 
+    spacing = 0.3          
     front_wall_color = [200, 200, 200, 255]  
     
     front_wall_origin = np.array([xmin, ymin, zmin])
@@ -389,7 +388,7 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         z=front_wall_z,
         mode='markers',
         marker=dict(
-            size=3,  # Ajusta el tamaño según necesidad
+            size=3, 
             color='white',
             opacity=0.6
         ),
@@ -397,20 +396,23 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         showlegend=False
     ))
 
-    # Actualizar el layout para mejor visualización
     fig3d.update_layout(
         scene=dict(
             xaxis_title='X',
             yaxis_title='Y',
             zaxis_title='Z',
-            aspectmode='data'
+            aspectmode='data',
+            camera=dict(
+                eye=dict(x=-1.5, y=-1.5, z=1),  
+                center=dict(x=0, y=0, z=0), 
+                up=dict(x=0, y=0, z=1)  
+            )
         ),
         title="3D Scene Visualization",
         width=800,
         height=800
     )
-
-    # Guardar los datos (opcional, está comentado)
+    
     # filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
     # savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
     
@@ -448,7 +450,22 @@ def main():
 
 
     # Initialize the sidebar parameters
-    st.sidebar.header("Simulation Parameters")
+    st.sidebar.header("Simulation parameters", divider="red")
+    
+    # Room Dimensions
+    st.sidebar.subheader("Room dimensions")
+    xmin = st.sidebar.number_input("X Min", value=-1.5, format="%.1f")
+    xmax = st.sidebar.number_input("X Max", value=1.5, format="%.1f")
+    ymax = st.sidebar.number_input("Y Max", value=3.0, format="%.1f")
+    zmax = st.sidebar.number_input("Z Max", value=3.0, format="%.1f")
+    
+    # Ensure valid room boundaries
+    if xmin >= xmax or ymin >= ymax or zmin >= zmax:
+        st.error("Invalid room dimensions! Make sure max values are greater than min values.")
+        st.stop()
+        
+    st.sidebar.subheader("Camera and laser parameters")
+
     camera_FOV = st.sidebar.slider("Camera FOV", 0.1, 1.0, 0.25)
     cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 64, 32, step=1)
     bin_size = st.sidebar.number_input("Bin Size (seconds)", value=390e-12, format="%.1e")
@@ -465,7 +482,7 @@ def main():
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({'obj_file': obj_file, 'xcoord': xcoord, 'ycoord': ycoord, 'w': w})
             
-    # **3.1. Validación de Tamaño de Objetos**
+    # Object Size Validation
     exceeds = False
     for obj in object_positions:
         obj_file = obj['obj_file']
@@ -475,6 +492,10 @@ def main():
         
         obj_path = os.path.join(object_folder, obj_file)
         obj = trimesh.load(obj_path, force='mesh')
+        
+        v1 = np.array([xcoord, ycoord, 0])
+        u = np.array([1, 0, 0])
+        theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
         
         # Calculate object boundaries based on its center and width
         min_x = x - w / 2
@@ -496,7 +517,7 @@ def main():
             exceeds = True
             
         if exceeds:
-            st.error("Por favor, ajusta el tamaño o la posición de los objetos para que encajen dentro de la habitación.")
+            st.error("Please adjust the size or position of the objects to fit within the room.")
             st.stop()  # Detener la ejecución para prevenir la simulación
         
     # Run overlap check
@@ -511,7 +532,7 @@ def main():
 
     # Run the simulation when button is clicked
     if st.sidebar.button("Run Simulation"):
-        fig3d, y_meas_vec = simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls)
+        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls)
 
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec
@@ -541,19 +562,24 @@ def main():
     fig_intensity = go.Figure(data=go.Heatmap(
         z=y_sum,
         colorscale='Viridis',
-        colorbar=dict(title='Intensity'),
+        colorbar=dict(title='Intensity', tickfont=dict(color='white'), titlefont=dict(color='white')),
+        
     ))
     
     fig_intensity.update_layout(
         title='Time-Integrated Intensity',
+        title_font=dict(color='white'),
         xaxis_title='Pixel X',
+        xaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white')),
         yaxis_title='Pixel Y',
-        yaxis=dict(scaleanchor="x", scaleratio=1),  # Ensure square pixels
+        yaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  # Ensure square pixels
+        plot_bgcolor='#0e1017',
+        paper_bgcolor='#0e1017',
     )
         
     col1, col2 = st.columns(2)
     
-    with col2:
+    with col1:
         # Display the plot and capture click events
         selected_points = plotly_events(
             fig_intensity,
@@ -587,12 +613,13 @@ def main():
     ))
                                      
     fig_temporal.update_layout(
+        
         title=f'Temporal Response at Pixel ({pixel_x}, {pixel_y})',
         xaxis_title='Time Bin',
         yaxis_title='Intensity'
     )
     
-    with col1:
+    with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
 
 if __name__ == "__main__":
