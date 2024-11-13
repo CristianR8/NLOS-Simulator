@@ -1,11 +1,8 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import trimesh
-from trimesh.transformations import rotation_matrix, translation_matrix
-from trimesh.visual.material import SimpleMaterial
+from trimesh.transformations import rotation_matrix
 from noise import add_sensor_noise, add_environmental_noise, add_shot_noise
-import uuid
 import glob
 import os
 import base64
@@ -19,9 +16,70 @@ c = 299792458
 
 object_folder = '/home/cristianr/NLOS-Simulator/objects/'
 
+# Room Dimensions (in meters)
+xmin, xmax = -3/2, 3/2
+ymin, ymax = 0, 3
+zmin, zmax = 0, 3
+
 # Function to list all .obj files in the folder
 def get_obj_files(folder):
     return [os.path.basename(f) for f in glob.glob(os.path.join(folder, '*.obj'))]
+
+# Function to create wall mesh
+def create_wall_mesh(origin, u_vec, v_vec, color ):
+    width = np.linalg.norm(u_vec)
+    height = np.linalg.norm(v_vec)
+    
+    wall = trimesh.creation.box(extents=(width, 0.01, height))  # Thickness of 0.01 in Y-axis
+    wall.visual.vertex_colors = color if color else [255, 255, 255, 255]
+    
+    # Calculate rotation to align wall
+    normal = np.cross(u_vec, v_vec)
+    normal = normal / np.linalg.norm(normal)
+    y_axis = np.array([0, 1, 0])  # Y-axis
+    rotation_axis = np.cross(y_axis, normal)
+    rotation_angle = np.arccos(np.clip(np.dot(y_axis, normal), -1.0, 1.0))
+    if np.linalg.norm(rotation_axis) > 0:
+        rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
+        rotation_matrix_wall = trimesh.transformations.rotation_matrix(rotation_angle, rotation_axis)
+        wall.apply_transform(rotation_matrix_wall)
+    
+    # Position the wall in the scene
+    wall.apply_translation(origin + 0.5 * (u_vec + v_vec))
+    return wall
+
+def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spacing):
+    """
+    Crea una pared escasa compuesta por esferas distribuidas en una cuadrícula.
+    
+    :param origin: Vector de origen de la pared (esquina inferior izquierda).
+    :param width_vec: Vector que define la anchura de la pared.
+    :param height_vec: Vector que define la altura de la pared.
+    :param color: Color de las esferas.
+    :param sphere_radius: Radio de cada esfera.
+    :param spacing: Espaciado entre las esferas.
+    :return: Lista de esferas (Trimesh meshes).
+    """
+    wall_spheres = []
+    
+    # Calcular el número de esferas en cada dimensión
+    num_x = int(np.linalg.norm(width_vec) // spacing)
+    num_z = int(np.linalg.norm(height_vec) // spacing)
+    
+    # Vectores unitarios para iterar
+    unit_width = width_vec / np.linalg.norm(width_vec)
+    unit_height = height_vec / np.linalg.norm(height_vec)
+    
+    for i in range(num_x + 1):
+        for j in range(num_z + 1):
+            # Posición de cada esfera
+            pos = origin + i * spacing * unit_width + j * spacing * unit_height
+            sphere = trimesh.creation.icosphere(subdivisions=1, radius=sphere_radius)
+            sphere.apply_translation(pos)
+            sphere.visual.vertex_colors = color
+            wall_spheres.append(sphere)
+    
+    return wall_spheres
 
 def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls): 
     objects = []
@@ -37,11 +95,6 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
 
     # Simulation parameters
     wall_discr = c / 2 * bin_size / 4
-
-    # Room Dimensions (in meters)
-    xmin, xmax = -3/2, 3/2
-    ymin, ymax = 0, 3
-    zmin, zmax = 0, 3
 
     params = {
         'cam_pixel_dim': cam_pixel_dim,
@@ -64,7 +117,6 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     object_color = [241, 148, 138, 255]  
     laser_color = [255, 0, 0, 255]  
     camera_pixel_color = [0, 255, 0, 255]
-    front_wall_color = [200, 200, 200, 30] 
     
     furthest_scene_point = np.array([xmax, ymax, zmax])
     furthest_spad_point = np.array([-params['camera_FOV'] / 2, -params['camera_FOV'], 0])
@@ -74,28 +126,6 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     num_time_bins = int(np.ceil((max_dist_travel / c / bin_size + 0.2 * max_dist_travel / c / bin_size)))
     params['num_time_bins'] = num_time_bins
     
-    # Function to create wall mesh
-    def create_wall_mesh(origin, u_vec, v_vec, color ):
-        width = np.linalg.norm(u_vec)
-        height = np.linalg.norm(v_vec)
-        
-        wall = trimesh.creation.box(extents=(width, 0.01, height))  # Thickness of 0.01 in Y-axis
-        wall.visual.vertex_colors = color if color else [255, 255, 255, 255]
-        
-        # Calculate rotation to align wall
-        normal = np.cross(u_vec, v_vec)
-        normal = normal / np.linalg.norm(normal)
-        y_axis = np.array([0, 1, 0])  # Y-axis
-        rotation_axis = np.cross(y_axis, normal)
-        rotation_angle = np.arccos(np.clip(np.dot(y_axis, normal), -1.0, 1.0))
-        if np.linalg.norm(rotation_axis) > 0:
-            rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
-            rotation_matrix_wall = trimesh.transformations.rotation_matrix(rotation_angle, rotation_axis)
-            wall.apply_transform(rotation_matrix_wall)
-        
-        # Position the wall in the scene
-        wall.apply_translation(origin + 0.5 * (u_vec + v_vec))
-        return wall
     
     if not hide_walls: 
         # Create walls and ceiling
@@ -118,9 +148,31 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         
         # Add walls to objects list
         objects.extend([back_wall, right_wall, left_wall, ceiling])
-
+        
+    x_start = xmin       
+    x_end = 0       
+    y_pos = ymin        
+    z_start = zmin     
+    z_end = zmax        
+    
+    sphere_radius = 0.03 
+    spacing = 0.5          
+    front_wall_color = [200, 200, 200, 255]  
+    
+    front_wall_origin = np.array([xmin, ymin, zmin])
+    front_wall_width = np.array([x_end - x_start, 0, 0])  
+    front_wall_height = np.array([0, 0, z_end - z_start])  
+    
+    front_wall_spheres = create_sparse_wall(
+        origin=front_wall_origin,
+        width_vec=front_wall_width,
+        height_vec=front_wall_height,
+        color=front_wall_color,
+        sphere_radius=sphere_radius,
+        spacing=spacing
+    )
+    
     # Add the main objects
-
     for obj_data in object_positions:
         obj_file = obj_data['obj_file']
         xcoord = obj_data['xcoord']
@@ -135,7 +187,7 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         obj = trimesh.load(obj_path, force='mesh')
         obj_extents = obj.extents
         scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
-        scale_factor = min(scale_factors) * 2
+        scale_factor = min(scale_factors) 
         obj.apply_scale(scale_factor)
         
         # Apply rotations and translations
@@ -189,62 +241,8 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     X, Y, T = np.meshgrid(pixel_x, pixel_y, pixel_t)
     cam_pixel = np.vstack([X.ravel(), Y.ravel(), T.ravel()]).T
     
-    sphere_radius = 0.02  
-    camera_pixel = []
-    #rotation = rotation_matrix(np.radians(90), [1, 0, 0])
-    for pos in cam_pos:
-        sphere = trimesh.creation.icosphere(radius=sphere_radius)
-        sphere.apply_translation(pos)
-        #sphere.apply_transform(rotation)
-        sphere.front_wall_color = [200, 200, 200, 100]  
-        sphere.visual.vertex_colors = camera_pixel_color
-        camera_pixel.append(sphere)
-        
-    # Agregar todas las esferas a la escena
-    scene.add_geometry(camera_pixel)
-    
-    ########################################################## Front wall
-    # Define the wall dimensions and position
-    x_start = xmin        # Start at x = 0
-    x_end = 0        # End at x = xmax
-    y_pos = ymin         # The wall is at the front (minimum y)
-    z_start = zmin       # Start at z = zmin
-    z_end = zmax         # End at z = zmax
-
-    # Define grid resolution (adjust as needed for density)
-    x_steps = 20         # Number of points along x-axis
-    z_steps = 20         # Number of points along z-axis
-
-    # Create a grid of points
-    x_coords = np.linspace(x_start, x_end, x_steps)
-    z_coords = np.linspace(z_start, z_end, z_steps)
-    X_grid, Z_grid = np.meshgrid(x_coords, z_coords)
-    Y_grid = np.full_like(X_grid, y_pos)  # All y coordinates are at y_pos
-
-    # Flatten the grids to create a list of point coordinates
-    wall_points = np.vstack((X_grid.flatten(), Y_grid.flatten(), Z_grid.flatten())).T
-
-    # Create small spheres at each point
-    sphere_radius = 0.03  # Adjust the radius as needed
-    wall_spheres = []
-    #rotation_wall = rotation_matrix(np.radians(-90), [1, 0, 0])
-    
-    for pos in wall_points:
-        sphere = trimesh.creation.icosphere(subdivisions=1, radius=sphere_radius)
-        sphere.apply_translation(pos)
-        #sphere.apply_transform(rotation_wall)
-        sphere.visual.vertex_colors = [200, 200, 200, 255]  # Color of the spheres
-        wall_spheres.append(sphere)
-
-    # Add the spheres representing the wall to the scene
-    scene.add_geometry(wall_spheres)
-    
     # Combinar las mallas y crear el intersector de rayos
     combined_mesh = trimesh.util.concatenate(objects)
-    try:
-        ray_intersector = trimesh.ray.ray_pyembree.RayMeshIntersector(combined_mesh)
-    except ImportError:
-        ray_intersector = trimesh.ray.ray_triangle.RayMeshIntersector(combined_mesh)
 
     # Obtener triángulos y normales
     triangles = combined_mesh.triangles
@@ -260,9 +258,8 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
 
     fourpi = 4 * np.pi * np.pi
     floor_normal = np.array([0, 0, 1])
-    floor_pixel_width = params['camera_FOV'] / params['cam_pixel_dim']
 
-    # Iterar sobre cada triángulo de la malla (equivalente a scene_pixel en el código original)
+    # Iterar sobre cada triángulo de la malla
     for idx in range(len(triangles)):
         # Obtener el triángulo y su normal
         triangle = triangles[idx]
@@ -302,7 +299,6 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     # Reshape para visualización
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], num_bins), order='F')
 
-
     # Añadir ruido de sensor
     y_meas_vec_noisy = add_sensor_noise(y_meas_vec, laser_intensity=laser_intensity)
 
@@ -312,10 +308,9 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
     # Añadir ruido de disparo (shot noise)
     y_meas_vec_noisy_3 = add_shot_noise(y_meas_vec_noisy_2) 
     
-    #### Scene customization for streamlit interface deplo
+    #### Scene customization for streamlit interface deploy
     # Create the 3D figure using Plotly
     fig3d = go.Figure()
-    
     
     # Add each object to the plot
     for mesh in objects:
@@ -346,18 +341,23 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
             name=f'Object {idx + 1}'
         ))
 
-    # Add the camera pixels as small green spheres
-    for sphere in camera_pixel:
-        x, y, z = sphere.vertices.T
-        i, j, k = sphere.faces.T
-        fig3d.add_trace(go.Mesh3d(
-            x=x, y=y, z=z,
-            i=i, j=j, k=k,
+    cam_x = cam_pos[:, 0]
+    cam_y = cam_pos[:, 1]
+    cam_z = cam_pos[:, 2]
+
+    fig3d.add_trace(go.Scatter3d(
+        x=cam_x,
+        y=cam_y,
+        z=cam_z,
+        mode='markers',
+        marker=dict(
+            size=3,  
             color='green',
-            opacity=1.0,
-            name='Camera Pixels',
-            showscale=False
-        ))
+            opacity=0.8
+        ),
+        name='Camera Pixels',
+        showlegend=False
+    ))
 
     # Add the laser sphere as a red sphere
     fig3d.add_trace(go.Mesh3d(
@@ -372,24 +372,32 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         name='Laser',
         showscale=False
     ))
+    
+    # Añadir la pared frontal escasa como Scatter3d
+    front_wall_x = []
+    front_wall_y = []
+    front_wall_z = []
 
-    # Add the front wall spheres as semi-transparent grey spheres
-    front_wall_points = wall_points
+    for sphere in front_wall_spheres:
+        front_wall_x.extend(sphere.vertices[:, 0])
+        front_wall_y.extend(sphere.vertices[:, 1])
+        front_wall_z.extend(sphere.vertices[:, 2])
+
     fig3d.add_trace(go.Scatter3d(
-        x=front_wall_points[:,0],
-        y=front_wall_points[:,1],
-        z=front_wall_points[:,2],
+        x=front_wall_x,
+        y=front_wall_y,
+        z=front_wall_z,
         mode='markers',
         marker=dict(
-            size=2,
+            size=3,  # Ajusta el tamaño según necesidad
             color='white',
-            opacity=1.0 
+            opacity=0.6
         ),
         name='Front Wall',
         showlegend=False
-))
+    ))
 
-    # Update the layout for better visualization
+    # Actualizar el layout para mejor visualización
     fig3d.update_layout(
         scene=dict(
             xaxis_title='X',
@@ -402,9 +410,10 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_posi
         height=800
     )
 
-    # Guardar los datos
-    filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
-    #savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
+    # Guardar los datos (opcional, está comentado)
+    # filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
+    # savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
+    
     return fig3d, y_meas_vec
 
 
@@ -453,9 +462,43 @@ def main():
         with st.sidebar.expander(f"Position for {obj_file}"):
             xcoord = st.number_input(f"{obj_file} X Coordinate", value=0.0, key=f"x_{obj_file}")
             ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
-            w = st.slider(f"{obj_file} Size", 0.1, 0.4, 0.2, key=f"w_{obj_file}")
+            w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({'obj_file': obj_file, 'xcoord': xcoord, 'ycoord': ycoord, 'w': w})
             
+    # **3.1. Validación de Tamaño de Objetos**
+    exceeds = False
+    for obj in object_positions:
+        obj_file = obj['obj_file']
+        x = obj['xcoord']
+        y = obj['ycoord']
+        w = obj['w']
+        
+        obj_path = os.path.join(object_folder, obj_file)
+        obj = trimesh.load(obj_path, force='mesh')
+        
+        # Calculate object boundaries based on its center and width
+        min_x = x - w / 2
+        max_x = x + w / 2
+        min_y = y - w / 2
+        max_y = y + w / 2
+        min_z = obj.vertices[:, 2].min()
+        max_z = min_z + w * 1.1  
+
+        # Check if the object exceeds the room boundaries
+        if min_x < xmin or max_x > xmax:
+            st.error(f"**{obj_file}** exceeds the room boundaries along the X-axis.")
+            exceeds = True
+        if min_y < ymin or max_y > ymax:
+            st.error(f"**{obj_file}** exceeds the room boundaries along the Y-axis.")
+            exceeds = True
+        if max_z > zmax:
+            st.error(f"**{obj_file}** exceeds the room boundaries along the Z-axis.")
+            exceeds = True
+            
+        if exceeds:
+            st.error("Por favor, ajusta el tamaño o la posición de los objetos para que encajen dentro de la habitación.")
+            st.stop()  # Detener la ejecución para prevenir la simulación
+        
     # Run overlap check
     overlaps = check_overlaps(object_positions)
     if overlaps:
@@ -542,7 +585,7 @@ def main():
         y=temporal_response,
         mode='lines'
     ))
-                                             
+                                     
     fig_temporal.update_layout(
         title=f'Temporal Response at Pixel ({pixel_x}, {pixel_y})',
         xaxis_title='Time Bin',
