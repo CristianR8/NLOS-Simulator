@@ -14,7 +14,7 @@ from streamlit_plotly_events import plotly_events
 
 c = 299792458
 
-object_folder = '/home/cristianr/NLOS-Simulator/objects/'
+object_folder = 'objects'
 
 # Room Dimensions fixed 
 ymin = 0
@@ -474,6 +474,7 @@ def main():
     st.sidebar.subheader("Objects selection")
 
     selected_obj_files = st.sidebar.multiselect("Select 3D Objects", obj_files)
+     
     object_positions = []
     for obj_file in selected_obj_files:
         with st.sidebar.expander(f"Position for {obj_file}"):
@@ -481,6 +482,11 @@ def main():
             ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({'obj_file': obj_file, 'xcoord': xcoord, 'ycoord': ycoord, 'w': w})
+      
+    if selected_obj_files:
+        st.sidebar.checkbox("Hide All Walls", value=False, key="hide_walls")
+    else:
+        st.sidebar.write("Please select an object to enable additional options.")  
             
     # Object Size Validation
     exceeds = False
@@ -528,7 +534,7 @@ def main():
             st.write(f"- **{obj1}** overlaps with **{obj2}**")
         st.stop()  # Stop the app here to prevent the simulation from running
 
-    hide_walls = st.sidebar.checkbox("Hide All Walls", value=False)
+    
 
     # Run the simulation when button is clicked
     if st.sidebar.button("Run Simulation"):
