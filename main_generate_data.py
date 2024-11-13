@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.io import savemat
+#from scipy.io import savemat
 import time
 import math
 
@@ -235,5 +235,5 @@ for xx in range(len(xcoord) - 1):
     plt.title('Suma a través de la tercera dimensión')
     plt.show()
     
-    filename = f"Video_{int(params['bin_size'] * 1e12)}ps_ThinFacet_pos_{xx}.mat"
-    savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec, 'objects': objects})
+    #filename = f"Video_{int(params['bin_size'] * 1e12)}ps_ThinFacet_pos_{xx}.mat"
+    #savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec, 'objects': objects})

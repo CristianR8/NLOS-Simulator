@@ -1,4 +1,3 @@
-scipy
 plotly
 streamlit
 numpy

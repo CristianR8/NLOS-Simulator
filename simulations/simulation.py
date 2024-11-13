@@ -1,7 +1,7 @@
 import numpy as np
 import gradio as gr
 import matplotlib.pyplot as plt
-from scipy.io import savemat
+#from scipy.io import savemat
 import time
 import trimesh
 from trimesh.transformations import rotation_matrix, translation_matrix
@@ -332,7 +332,7 @@ def simulation(camera_FOV, cam_pixel_dim, bin_size, laser_intensity, w, xcoord, 
     plt.show()
 
     # Guardar los datos
-    filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
+    #filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
     #savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
     return scene_filename, temporal_response_plot
 
