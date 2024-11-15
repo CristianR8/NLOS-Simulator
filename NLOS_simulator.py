@@ -16,7 +16,7 @@ c = 299792458
 
 object_folder = 'objects'
 
-# Room Dimensions fixed 
+# Room Dimensions fixed     
 ymin = 0
 zmin = 0
 
@@ -454,10 +454,10 @@ def main():
     
     # Room Dimensions
     st.sidebar.subheader("Room dimensions")
-    xmin = st.sidebar.number_input("X Min", value=-1.5, format="%.1f")
-    xmax = st.sidebar.number_input("X Max", value=1.5, format="%.1f")
-    ymax = st.sidebar.number_input("Y Max", value=3.0, format="%.1f")
-    zmax = st.sidebar.number_input("Z Max", value=3.0, format="%.1f")
+    xmax = st.sidebar.number_input("Room width (min: 1 - max: 10)", value=1.5, min_value=1.0, max_value=10.0, format="%.1f")
+    xmin = -xmax
+    ymax = st.sidebar.number_input("Room length (min: 1 - max: 10) ", value=3.0, min_value=1.0, max_value=10.0, format="%.1f")
+    zmax = st.sidebar.number_input("Room height (min: 1 - max: 10)", value=3.0, min_value=1.0, max_value=10.0, format="%.1f")
     
     # Ensure valid room boundaries
     if xmin >= xmax or ymin >= ymax or zmin >= zmax:
@@ -478,6 +478,7 @@ def main():
     object_positions = []
     for obj_file in selected_obj_files:
         with st.sidebar.expander(f"Position for {obj_file}"):
+            st.markdown(''':red[Take into account the dimensions of the room]''')
             xcoord = st.number_input(f"{obj_file} X Coordinate", value=0.0, key=f"x_{obj_file}")
             ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
