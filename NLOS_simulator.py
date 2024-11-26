@@ -176,10 +176,12 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         obj_file = obj_data['obj_file']
         xcoord = obj_data['xcoord']
         ycoord = obj_data['ycoord']
+        zcoord = obj_data['zcoord']
         w = obj_data['w']
-        v1 = np.array([xcoord, ycoord, 0])
+        angle = obj_data['angle']
+        v1 = np.array([xcoord, ycoord, zcoord])
         u = np.array([1, 0, 0])
-        theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
+        theta = angle
     
         # Load the object
         obj_path = os.path.join(object_folder, obj_file)
@@ -481,8 +483,22 @@ def main():
             st.markdown(''':red[Take into account the dimensions of the room]''')
             xcoord = st.number_input(f"{obj_file} X Coordinate", value=0.0, key=f"x_{obj_file}")
             ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
+            zcoord = st.number_input(f"{obj_file} Z Coordinate", value=0.0, key=f"z_{obj_file}")
+            v1 = np.array([xcoord, ycoord, zcoord])
+            u = np.array([1, 0, 0])
+            theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
+            angle = st.number_input(f"{obj_file} Angle of Rotation (radians)", value=theta, key=f"theta_{obj_file}")
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
-            object_positions.append({'obj_file': obj_file, 'xcoord': xcoord, 'ycoord': ycoord, 'w': w})
+            object_positions.append({
+                'obj_file': obj_file,
+                'xcoord': xcoord,
+                'ycoord': ycoord,
+                'zcoord': zcoord,
+                'w': w,
+                'angle': angle
+            })
+
+
             
     if selected_obj_files:
         hide_walls = st.sidebar.checkbox("Hide All Walls", value=False)
@@ -496,21 +512,31 @@ def main():
         obj_file = obj['obj_file']
         x = obj['xcoord']
         y = obj['ycoord']
+        zcoord = obj['zcoord']
         w = obj['w']
+        angle = obj['angle']
         
         obj_path = os.path.join(object_folder, obj_file)
-        obj = trimesh.load(obj_path, force='mesh')
-        
-        v1 = np.array([xcoord, ycoord, 0])
-        u = np.array([1, 0, 0])
-        theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
+        obj_mesh = trimesh.load(obj_path, force='mesh')
+        obj_extents = obj_mesh.extents
+        scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
+        scale_factor = min(scale_factors) 
+        obj_mesh.apply_scale(scale_factor)
+        rotation = rotation_matrix(np.degrees(90), [1, 0, 0])
+        obj_mesh.apply_transform(rotation)
+        rotation_z = rotation_matrix(angle, [0, 0, 1])
+        obj_mesh.apply_transform(rotation_z)
+        z_min = obj_mesh.vertices[:, 2].min()
+        obj_mesh.apply_translation([0,0, -z_min])
+        v1 = np.array([xcoord, ycoord, zcoord])
+        obj_mesh.apply_translation(v1)
         
         # Calculate object boundaries based on its center and width
         min_x = x - w / 2
         max_x = x + w / 2
         min_y = y - w / 2
         max_y = y + w / 2
-        min_z = obj.vertices[:, 2].min()
+        min_z = obj_mesh.vertices[:, 2].min()
         max_z = min_z + w * 1.1  
 
         # Check if the object exceeds the room boundaries
