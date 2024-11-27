@@ -80,7 +80,7 @@ def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spac
     
     return wall_spheres
 
-def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls): 
+def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB): 
     objects = []
     scene_objects = []
     
@@ -301,7 +301,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], num_bins), order='F')
 
     # Añadir ruido de sensor
-    y_meas_vec_noisy = add_sensor_noise(y_meas_vec, laser_intensity=laser_intensity)
+    y_meas_vec_noisy = add_sensor_noise(y_meas_vec, SNR_dB)
 
     # Añadir ruido ambiental
     y_meas_vec_noisy_2 = add_environmental_noise(y_meas_vec_noisy)
@@ -418,7 +418,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     # filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
     # savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
     
-    return fig3d, y_meas_vec
+    return fig3d, y_meas_vec_noisy
 
 
 # Streamlit App
@@ -472,6 +472,7 @@ def main():
     cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 64, 32, step=1)
     bin_size = st.sidebar.number_input("Bin Size (seconds)", value=390e-12, format="%.1e")
     laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 50, 1000, 1000)
+    SNR_dB = st.sidebar.slider("SNR (dB)", 1, 100, 20)
     obj_files = get_obj_files(object_folder)
     st.sidebar.subheader("Objects selection")
 
@@ -565,7 +566,7 @@ def main():
 
     # Run the simulation when button is clicked
     if st.sidebar.button("Run Simulation"):
-        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls)
+        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB)
 
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec

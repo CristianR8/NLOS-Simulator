@@ -1,33 +1,14 @@
 import numpy as np
 
-def add_sensor_noise(data, laser_intensity, noise=0.01):
-    """
-    Add sensor noise based on the signal-to-noise ratio (SNR).
-    The noise variance is inversely proportional to the SNR.
-
-    Args:
-        data (np.ndarray): Input signal data.
-        snr (float): Signal-to-noise ratio.
-        laser_intensity (float): Intensity of the laser or signal power.
-        
-    Returns:
-        np.ndarray: Noisy data.
-    """
-    # Calculate signal power proportional to laser intensity
-    signal_power = laser_intensity  # Assume signal power ~ laser intensity
-
-    snr = laser_intensity / noise
-
-    # Compute noise standard deviation (std) based on SNR
-    noise_std = np.sqrt(signal_power / snr)
-
-    # Add Gaussian noise to the data
-    noise = np.random.normal(0, noise_std, data.shape)
-    
-    # Add noise and clip to ensure non-negative values
-    noisy_data = np.clip(data + noise, 0, None)
-    
-    return noisy_data
+def add_sensor_noise(data, SNR_dB):
+    signal_power = np.mean(data ** 2)
+    SNR_linear = 10 ** (SNR_dB / 10)
+    noise_power = signal_power / SNR_linear
+    noise_std = np.sqrt(noise_power)
+    noise = noise_std * np.random.randn(*data.shape)
+    noise_clipped = np.clip(noise, 0, None)
+    y_meas_vec_noisy = data + noise_clipped
+    return y_meas_vec_noisy
 
 def add_environmental_noise(data, ambient_light=0.01):
     
