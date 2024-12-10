@@ -5,9 +5,9 @@ def add_sensor_noise(data, SNR_dB):
     SNR_linear = 10 ** (SNR_dB / 10)
     noise_power = signal_power / SNR_linear
     noise_std = np.sqrt(noise_power)
-    noise = noise_std * np.random.randn(*data.shape)
-    noise_clipped = np.clip(noise, 0, None)
-    y_meas_vec_noisy = data + noise_clipped
+    noise = noise_std * np.random.rand(*data.shape)
+    #noise_clipped = np.clip(noise, 0, None)
+    y_meas_vec_noisy = data + noise
     return y_meas_vec_noisy
 
 def add_environmental_noise(data, ambient_light=0.01):

@@ -12,6 +12,7 @@ from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
 
 
+
 c = 299792458
 
 object_folder = 'objects'
@@ -80,7 +81,7 @@ def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spac
     
     return wall_spheres
 
-def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB): 
+def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB,  uploaded_objs=None): 
     objects = []
     scene_objects = []
     
@@ -179,20 +180,32 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         zcoord = obj_data['zcoord']
         w = obj_data['w']
         angle = obj_data['angle']
+        angle_2 = obj_data['angle_2']
         v1 = np.array([xcoord, ycoord, zcoord])
         u = np.array([1, 0, 0])
         theta = angle
-    
+        
+        if uploaded_objs and obj_file.startswith("uploaded_"):
+            # Handle uploaded file
+            uploaded_file = uploaded_objs[obj_file]
+            uploaded_file.seek(0)
+            obj = trimesh.load(uploaded_file, file_type='obj', force='mesh')
+        else:
+            # Handle pre-existing file
+            obj_path = os.path.join(object_folder, obj_file)
+            obj = trimesh.load(obj_path, force='mesh')
+        
+        if isinstance(obj, list):
+            obj = trimesh.util.concatenate(obj)
+
         # Load the object
-        obj_path = os.path.join(object_folder, obj_file)
-        obj = trimesh.load(obj_path, force='mesh')
         obj_extents = obj.extents
         scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
         scale_factor = min(scale_factors) 
         obj.apply_scale(scale_factor)
         
         # Apply rotations and translations
-        rotation = rotation_matrix(np.radians(90), [1, 0, 0])
+        rotation = rotation_matrix(angle_2, [1, 0, 0])
         obj.apply_transform(rotation)
         rotation_z = rotation_matrix(theta, [0, 0, 1])
         obj.apply_transform(rotation_z)
@@ -307,7 +320,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     y_meas_vec_noisy_2 = add_environmental_noise(y_meas_vec_noisy)
 
     # Añadir ruido de disparo (shot noise)
-    y_meas_vec_noisy_3 = add_shot_noise(y_meas_vec_noisy_2) 
+    y_meas_vec_noisy_3 = add_shot_noise(y_meas_vec_noisy) 
     
     #### Scene customization for streamlit interface deploy
     # Create the 3D figure using Plotly
@@ -473,11 +486,36 @@ def main():
     bin_size = st.sidebar.number_input("Bin Size (seconds)", value=390e-12, format="%.1e")
     laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 50, 1000, 1000)
     SNR_dB = st.sidebar.slider("SNR (dB)", 1, 100, 20)
-    obj_files = get_obj_files(object_folder)
-    st.sidebar.subheader("Objects selection")
+    
+    st.sidebar.subheader("Upload Your Own 3D Objects")
+    
+    uploaded_files = st.sidebar.file_uploader(
+        "Choose `.obj` files to upload",
+        type=["obj"],
+        accept_multiple_files=True
+    )
+    
+    uploaded_obj_files = []
+    
+    uploaded_objs = {}
+    
+    if uploaded_files:
+        st.sidebar.success(f"Uploaded {len(uploaded_files)} file(s).")
+        for uploaded_file in uploaded_files:
+            # Assign a unique name to avoid conflicts
+            unique_name = f"uploaded_{uploaded_file.name}"
+            uploaded_obj_files.append(unique_name)
+            uploaded_objs[unique_name] = uploaded_file
+            
+    all_obj_files = get_obj_files(object_folder) + uploaded_obj_files
 
-    selected_obj_files = st.sidebar.multiselect("Select 3D Objects", obj_files)
+    if not all_obj_files:
+        st.sidebar.warning("No `.obj` files found in the `objects` folder or uploaded.")
         
+    st.sidebar.subheader("Objects selection")
+    
+    selected_obj_files = st.sidebar.multiselect("Select 3D Objects", all_obj_files)
+
     object_positions = []
     for obj_file in selected_obj_files:
         with st.sidebar.expander(f"Position for {obj_file}"):
@@ -489,6 +527,8 @@ def main():
             u = np.array([1, 0, 0])
             theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
             angle = st.number_input(f"{obj_file} Angle of Rotation (radians)", value=theta, key=f"theta_{obj_file}")
+            angle_2 = st.number_input(f"{obj_file} Angle of Rotation about Z-axis (radians)", value=1.5708, key=f"zangle_{obj_file}")
+
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({
                 'obj_file': obj_file,
@@ -496,19 +536,18 @@ def main():
                 'ycoord': ycoord,
                 'zcoord': zcoord,
                 'w': w,
-                'angle': angle
+                'angle': angle,
+                'angle_2': angle_2
             })
-
-
             
     if selected_obj_files:
         hide_walls = st.sidebar.checkbox("Hide All Walls", value=False)
     else:
-        st.sidebar.write("Please select an object to enable additional options.")
         hide_walls = False
         
     # Object Size Validation
     exceeds = False
+    transformed_objects = []
     for obj in object_positions:
         obj_file = obj['obj_file']
         x = obj['xcoord']
@@ -516,14 +555,26 @@ def main():
         zcoord = obj['zcoord']
         w = obj['w']
         angle = obj['angle']
+        angle_2 = obj['angle_2']
         
-        obj_path = os.path.join(object_folder, obj_file)
-        obj_mesh = trimesh.load(obj_path, force='mesh')
+        if uploaded_objs and obj_file.startswith("uploaded_"):
+            # Handle uploaded file
+            uploaded_file = uploaded_objs[obj_file]
+            uploaded_file.seek(0)
+            obj_mesh = trimesh.load(uploaded_file, file_type='obj', force='mesh')
+        else:
+            # Handle pre-existing file
+            obj_path = os.path.join(object_folder, obj_file)
+            obj_mesh = trimesh.load(obj_path, force='mesh')
+            
+        if isinstance(obj, list):
+            obj = trimesh.util.concatenate(obj)
+
         obj_extents = obj_mesh.extents
         scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
         scale_factor = min(scale_factors) 
         obj_mesh.apply_scale(scale_factor)
-        rotation = rotation_matrix(np.degrees(90), [1, 0, 0])
+        rotation = rotation_matrix(angle_2, [1, 0, 0])
         obj_mesh.apply_transform(rotation)
         rotation_z = rotation_matrix(angle, [0, 0, 1])
         obj_mesh.apply_transform(rotation_z)
@@ -532,6 +583,14 @@ def main():
         v1 = np.array([xcoord, ycoord, zcoord])
         obj_mesh.apply_translation(v1)
         
+        transformed_objects.append({
+            'obj_file': obj_file,
+            'xcoord': x,
+            'ycoord': y,
+            'zcoord': zcoord,
+            'w': w,
+            'mesh': obj_mesh
+        })
         # Calculate object boundaries based on its center and width
         min_x = x - w / 2
         max_x = x + w / 2
@@ -555,18 +614,30 @@ def main():
             st.error("Please adjust the size or position of the objects to fit within the room.")
             st.stop()  # Detener la ejecución para prevenir la simulación
         
+    def validate_object_positions(object_positions):
+        required_keys = {'obj_file', 'xcoord', 'ycoord', 'zcoord', 'w'}
+        for obj in object_positions:
+            if not required_keys.issubset(obj.keys()):
+                st.error(f"Invalid object structure: {obj}")
+                return False
+        return True
+
+    # Validate the object positions
+    if not validate_object_positions(object_positions):
+        st.stop()
+        
     # Run overlap check
-    overlaps = check_overlaps(object_positions)
+    overlaps = check_overlaps(transformed_objects)
     if overlaps:
         st.error("The following objects are overlapping. Please adjust their positions to avoid overlaps:")
         for obj1, obj2 in overlaps:
             st.write(f"- **{obj1}** overlaps with **{obj2}**")
         st.stop()  # Stop the app here to prevent the simulation from running
 
-
     # Run the simulation when button is clicked
-    if st.sidebar.button("Run Simulation"):
-        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB)
+    st.sidebar.write(''':red[You need to press the “Run simulation” button always after any change to display the simulation.]''')
+    if st.sidebar.button("Run simulation"):
+        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, uploaded_objs=uploaded_objs)
 
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec

@@ -1,0 +1,29 @@
+# Virtual environment
+.venv/
+env/
+
+# Bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Streamlit cache and config
+.streamlit/
+
+# Project-specific folders
+flagged/
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore VSCode and PyCharm config files
+.vscode/
+.idea/

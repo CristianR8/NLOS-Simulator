@@ -4,3 +4,4 @@ numpy
 trimesh
 streamlit_plotly_events
 scipy
+blendify
