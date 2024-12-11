@@ -27,3 +27,5 @@ flagged/
 # Ignore VSCode and PyCharm config files
 .vscode/
 .idea/
+
+__pycache__
