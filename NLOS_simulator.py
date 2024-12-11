@@ -10,6 +10,7 @@ import logging
 import plotly.graph_objects as go
 from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
+from save import save_to_mat, save_to_raw
 
 
 
@@ -431,7 +432,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     # filename = f"Simulacion_Con_Malla_{int(params['bin_size'] * 1e12)}ps.mat"
     # savemat(filename, {'params': params, 'y_meas_vec': y_meas_vec_noisy_reshaped, 'objects': objects})
     
-    return fig3d, y_meas_vec_noisy
+    return fig3d, y_meas_vec_noisy, params
 
 
 # Streamlit App
@@ -637,11 +638,12 @@ def main():
     # Run the simulation when button is clicked
     st.sidebar.write(''':red[You need to press the “Run simulation” button always after any change to display the simulation.]''')
     if st.sidebar.button("Run simulation"):
-        fig3d, y_meas_vec = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, uploaded_objs=uploaded_objs)
+        fig3d, y_meas_vec, params = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, uploaded_objs=uploaded_objs)
 
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec
         st.session_state['fig3d'] = fig3d
+        st.session_state['params'] = params
         st.session_state['pixel_x'] = cam_pixel_dim // 2
         st.session_state['pixel_y'] = cam_pixel_dim // 2
 
@@ -649,6 +651,8 @@ def main():
     if 'y_meas_vec' in st.session_state and 'fig3d' in st.session_state:
         y_meas_vec = st.session_state['y_meas_vec']
         fig3d = st.session_state['fig3d']
+        params = st.session_state['params']
+        
     else:
         st.warning("Please run the simulation first.")
         return
@@ -726,6 +730,27 @@ def main():
     
     with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
+
+
+    st.markdown("### Download Transient Measurements")
+
+    # Download as .mat file
+    mat_buffer = save_to_mat(y_meas_vec, params)
+    st.download_button(
+        label="Download as .mat",
+        data=mat_buffer,
+        file_name="transient_measurements.mat",
+        mime="application/octet-stream"
+    )
+
+    # Download as .raw file
+    raw_buffer = save_to_raw(y_meas_vec)
+    st.download_button(
+        label="Download as .raw",
+        data=raw_buffer,
+        file_name="transient_measurements.raw",
+        mime="application/octet-stream"
+    )
 
 if __name__ == "__main__":
     main()
