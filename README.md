@@ -11,13 +11,13 @@
 
 ## 📝 Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Demo](#demo)
-- [Dependencies](#dependencies)
-- [Contributing](#contributing)
+- [Overview](#-overview)
+- [Features](#-features)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Demo](#-demo)
+- [Dependencies](#-dependencies)
+- [Contributing](#-contributing)
 
 ---
 
