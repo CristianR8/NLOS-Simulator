@@ -1,48 +1,90 @@
 import numpy as np
 
 def add_sensor_noise(data, SNR_dB):
-    signal_power = np.mean(data ** 2)
+    
+    # Calculate signal power
+    signal_power = np.mean(np.abs(data) ** 2)
+    
+    # Calculate noise power based on desired SNR
     SNR_linear = 10 ** (SNR_dB / 10)
     noise_power = signal_power / SNR_linear
+    
+    # Generate Gaussian noise
     noise_std = np.sqrt(noise_power)
-    noise = noise_std * np.random.rand(*data.shape)
-    #noise_clipped = np.clip(noise, 0, None)
-    y_meas_vec_noisy = data + noise
-    return y_meas_vec_noisy
-
-def add_environmental_noise(data, ambient_light=0.01):
+    noise = abs(noise_std * np.random.normal(size = data.shape))
     
-    # Compute the range of uniform noise based on ambient light intensity
-    noise_range = ambient_light # Scale noise with ambient light
+    #Add noise to the original signal
+    noisy_data = data + noise
+    
+    return noisy_data
 
-    # Add uniform noise to the data
-    noise = np.random.uniform(0, noise_range, data.shape)
-
-    return data + noise 
-
-def add_shot_noise(data, scale_factor=1000):
+def add_background_noise(data, sbr, axis=-1, inplace=False):
     """
-    Add shot noise (Poisson noise) to the input signal data with scaling.
-    
-    Args:
-        data (np.ndarray): Input signal data (non-negative values).
-        scale_factor (float): Factor to scale the data to prevent signal loss.
+    Add background noise to transient data to achieve a desired Signal-to-Background Ratio (SBR).
+
+    Parameters:
+    - data: np.ndarray
+        Transient data (e.g., photon counts) with time bins along the specified axis.
+    - sbr: float
+        Desired signal-to-background ratio (SBR). Must be > 0.
+    - axis: int
+        Axis corresponding to the time bins. Default is -1.
+    - inplace: bool
+        If True, modify the data in place. Otherwise, return a new array with background added.
 
     Returns:
-        np.ndarray: Noisy data with added shot noise.
+    - np.ndarray
+        Transient data with background noise added.
     """
-    if np.any(data < 0):
-        raise ValueError("Input data must be non-negative for shot noise.")
 
-    # Scale the data to avoid loss of small signals
+    if sbr <= 0:
+        raise ValueError("SBR must be greater than 0.")
+
+    # Sum of photons along the specified axis (signal)
+    signal_sum = np.sum(data, axis=axis, keepdims=True)
+
+    # Calculate the number of ambient photons needed to achieve the desired SBR
+    background_photon_sum = signal_sum / sbr
+
+    # Uniform background to add to each time bin
+    background = background_photon_sum / data.shape[axis]
+
+    if inplace:
+        data += background
+        return data
+    else:
+        return data + background
+
+def add_poisson_noise(data, n_mc_samples=1, scale_factor=100):
+    """
+    Add Poisson noise to the transient data with scaling to preserve the signal.
+
+    Parameters:
+    - transient: np.ndarray
+        The input transient data (non-negative values).
+    - n_mc_samples: int
+        The number of Monte Carlo samples to generate.
+    - scale_factor: float
+        Factor to scale the transient data to avoid excessive noise.
+
+    Returns:
+    - np.ndarray
+        Transient data with added Poisson noise, shape (n_mc_samples, *transient.shape).
+    """
+
+    if np.any(data < 0):
+        raise ValueError("Input data must be non-negative for Poisson noise.")
+
+    # Scale the data to avoid loss of small signals (Poisson noise works best with larger values)
     scaled_data = data * scale_factor
 
     # Add Poisson noise to the scaled data
-    noisy_data = np.random.poisson(scaled_data).astype(float)
+    noisy_data = np.random.poisson(lam=scaled_data, size=(n_mc_samples,) + data.shape).astype(float)
 
-    # Rescale back to the original range
+    # Rescale the noisy data back to the original range
     noisy_data /= scale_factor
 
+    if n_mc_samples == 1:
+        return noisy_data.squeeze(axis=0)
     return noisy_data
 
-    

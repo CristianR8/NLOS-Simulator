@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import trimesh
 from trimesh.transformations import rotation_matrix
-from noise import add_sensor_noise, add_environmental_noise, add_shot_noise
+from noise import add_sensor_noise, add_background_noise, add_poisson_noise
 import glob
 import os
 import base64
@@ -23,8 +23,10 @@ ymin = 0
 zmin = 0
 
 # Function to list all .obj files in the folder
-def get_obj_files(folder):
-    return [os.path.basename(f) for f in glob.glob(os.path.join(folder, '*.obj'))]
+def get_obj_files(folder, uploaded_files_dict):
+    preloaded_files = [os.path.basename(f) for f in glob.glob(os.path.join(folder, '*.obj'))]
+    uploaded_files = list(uploaded_files_dict.keys())
+    return preloaded_files + uploaded_files
 
 # Function to create wall mesh
 def create_wall_mesh(origin, u_vec, v_vec, color ):
@@ -82,7 +84,7 @@ def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spac
     
     return wall_spheres
 
-def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB,  uploaded_objs=None): 
+def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, SBR, poisson_scale_factor, add_noise, uploaded_objs=None): 
     objects = []
     scene_objects = []
     
@@ -191,13 +193,13 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
             uploaded_file = uploaded_objs[obj_file]
             uploaded_file.seek(0)
             obj = trimesh.load(uploaded_file, file_type='obj', force='mesh')
+            if isinstance(obj, trimesh.Scene):
+                obj = obj.dump(concatenate=True)
         else:
             # Handle pre-existing file
             obj_path = os.path.join(object_folder, obj_file)
             obj = trimesh.load(obj_path, force='mesh')
         
-        if isinstance(obj, list):
-            obj = trimesh.util.concatenate(obj)
 
         # Load the object
         obj_extents = obj.extents
@@ -210,6 +212,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         obj.apply_transform(rotation)
         rotation_z = rotation_matrix(theta, [0, 0, 1])
         obj.apply_transform(rotation_z)
+        
         z_min = obj.vertices[:, 2].min()
         obj.apply_translation([0,0, -z_min])
         obj.apply_translation(v1)
@@ -314,14 +317,21 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     # Reshape para visualización
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], num_bins), order='F')
 
-    # Añadir ruido de sensor
-    y_meas_vec_noisy = add_sensor_noise(y_meas_vec, SNR_dB)
+    if add_noise:
+        # Añadir ruido ambiental
+        y_with_background = add_background_noise(y_meas_vec, sbr=SBR)
+            
+        # Añadir ruido de disparo (shot noise)
+        y_with_shot_noise = add_poisson_noise(y_with_background, scale_factor=poisson_scale_factor)
+            
+        # Añadir ruido de sensor
+        y_with_sensor_noise = add_sensor_noise(y_with_shot_noise, SNR_dB)
 
-    # Añadir ruido ambiental
-    y_meas_vec_noisy_2 = add_environmental_noise(y_meas_vec_noisy)
-
-    # Añadir ruido de disparo (shot noise)
-    y_meas_vec_noisy_3 = add_shot_noise(y_meas_vec_noisy) 
+        y_meas_vec_noisy = y_with_sensor_noise
+    else:
+        # If noise is not added, keep the original measurement
+        y_meas_vec_noisy = y_meas_vec
+            
     
     #### Scene customization for streamlit interface deploy
     # Create the 3D figure using Plotly
@@ -405,10 +415,10 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         mode='markers',
         marker=dict(
             size=3, 
-            color='white',
+            color='dodgerblue',
             opacity=0.6
         ),
-        name='Front Wall',
+        name='Occluding Wall',
         showlegend=False
     ))
 
@@ -485,9 +495,16 @@ def main():
     camera_FOV = st.sidebar.slider("Camera FOV", 0.1, 1.0, 0.25)
     cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 64, 32, step=1)
     bin_size = st.sidebar.number_input("Bin Size (seconds)", value=390e-12, format="%.1e")
-    laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 50, 1000, 1000)
-    SNR_dB = st.sidebar.slider("SNR (dB)", 1, 100, 20)
-    
+    laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 500, 1000, 1000)
+    add_noise = st.sidebar.checkbox("Add Noise", value=False)
+    if add_noise: 
+        SNR_dB = st.sidebar.slider("SNR (dB)", 5, 30, 20)
+        SBR = st.sidebar.slider("Desired SBR (dB)", 0.1, 5.0, 1.0, step=0.1)
+        poisson_scale_factor = st.sidebar.slider("Poisson Noise Scale Factor", 10, 1000, 100)
+    else:
+        SNR_dB = None
+        SBR = None
+        poisson_scale_factor = None
     st.sidebar.subheader("Upload Your Own 3D Objects")
     
     uploaded_files = st.sidebar.file_uploader(
@@ -508,7 +525,7 @@ def main():
             uploaded_obj_files.append(unique_name)
             uploaded_objs[unique_name] = uploaded_file
             
-    all_obj_files = get_obj_files(object_folder) + uploaded_obj_files
+    all_obj_files = get_obj_files(object_folder, uploaded_objs)
 
     if not all_obj_files:
         st.sidebar.warning("No `.obj` files found in the `objects` folder or uploaded.")
@@ -527,8 +544,8 @@ def main():
             v1 = np.array([xcoord, ycoord, zcoord])
             u = np.array([1, 0, 0])
             theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
-            angle = st.number_input(f"{obj_file} Angle of Rotation (radians)", value=theta, key=f"theta_{obj_file}")
-            angle_2 = st.number_input(f"{obj_file} Angle of Rotation about Z-axis (radians)", value=1.5708, key=f"zangle_{obj_file}")
+            angle = st.number_input(f"{obj_file} Pitch (radians)", value=theta, key=f"theta_{obj_file}")
+            angle_2 = st.number_input(f"{obj_file} Yaw (radians)", value=1.5708, key=f"zangle_{obj_file}")
 
             w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({
@@ -562,27 +579,26 @@ def main():
             # Handle uploaded file
             uploaded_file = uploaded_objs[obj_file]
             uploaded_file.seek(0)
-            obj_mesh = trimesh.load(uploaded_file, file_type='obj', force='mesh')
+            obj = trimesh.load(uploaded_file, file_type='obj', force='mesh')
+            if isinstance(obj, trimesh.Scene):
+                obj = obj.dump(concatenate=True)
         else:
             # Handle pre-existing file
             obj_path = os.path.join(object_folder, obj_file)
-            obj_mesh = trimesh.load(obj_path, force='mesh')
-            
-        if isinstance(obj, list):
-            obj = trimesh.util.concatenate(obj)
+            obj = trimesh.load(obj_path, force='mesh')
 
-        obj_extents = obj_mesh.extents
+        obj_extents = obj.extents
         scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
         scale_factor = min(scale_factors) 
-        obj_mesh.apply_scale(scale_factor)
+        obj.apply_scale(scale_factor)
         rotation = rotation_matrix(angle_2, [1, 0, 0])
-        obj_mesh.apply_transform(rotation)
+        obj.apply_transform(rotation)
         rotation_z = rotation_matrix(angle, [0, 0, 1])
-        obj_mesh.apply_transform(rotation_z)
-        z_min = obj_mesh.vertices[:, 2].min()
-        obj_mesh.apply_translation([0,0, -z_min])
+        obj.apply_transform(rotation_z)
+        z_min = obj.vertices[:, 2].min()
+        obj.apply_translation([0,0, -z_min])
         v1 = np.array([xcoord, ycoord, zcoord])
-        obj_mesh.apply_translation(v1)
+        obj.apply_translation(v1)
         
         transformed_objects.append({
             'obj_file': obj_file,
@@ -590,14 +606,14 @@ def main():
             'ycoord': y,
             'zcoord': zcoord,
             'w': w,
-            'mesh': obj_mesh
+            'mesh': obj
         })
         # Calculate object boundaries based on its center and width
         min_x = x - w / 2
         max_x = x + w / 2
         min_y = y - w / 2
         max_y = y + w / 2
-        min_z = obj_mesh.vertices[:, 2].min()
+        min_z = obj.vertices[:, 2].min()
         max_z = min_z + w * 1.1  
 
         # Check if the object exceeds the room boundaries
@@ -638,7 +654,7 @@ def main():
     # Run the simulation when button is clicked
     st.sidebar.write(''':red[You need to press the “Run simulation” button always after any change to display the simulation.]''')
     if st.sidebar.button("Run simulation"):
-        fig3d, y_meas_vec, params = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, uploaded_objs=uploaded_objs)
+        fig3d, y_meas_vec, params = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, SBR, poisson_scale_factor, add_noise, uploaded_objs=uploaded_objs)
 
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec
