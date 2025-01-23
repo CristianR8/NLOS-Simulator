@@ -12,8 +12,6 @@ from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
 from save import save_to_mat, save_to_raw
 
-
-
 c = 299792458
 
 object_folder = 'objects'
@@ -29,12 +27,11 @@ def get_obj_files(folder, uploaded_files_dict):
     return preloaded_files + uploaded_files
 
 # Function to create wall mesh
-def create_wall_mesh(origin, u_vec, v_vec, color ):
+def create_wall_mesh(origin, u_vec, v_vec):
     width = np.linalg.norm(u_vec)
     height = np.linalg.norm(v_vec)
     
     wall = trimesh.creation.box(extents=(width, 0.01, height))  # Thickness of 0.01 in Y-axis
-    wall.visual.vertex_colors = color if color else [255, 255, 255, 255]
     
     # Calculate rotation to align wall
     normal = np.cross(u_vec, v_vec)
@@ -75,11 +72,9 @@ def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spac
     
     for i in range(num_x + 1):
         for j in range(num_z + 1):
-            # Posición de cada esfera
             pos = origin + i * spacing * unit_width + j * spacing * unit_height
             sphere = trimesh.creation.icosphere(subdivisions=1, radius=sphere_radius)
             sphere.apply_translation(pos)
-            sphere.visual.vertex_colors = color
             wall_spheres.append(sphere)
     
     return wall_spheres
@@ -119,7 +114,6 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     ceiling_color = [52, 73, 94, 255]  
     object_color = [241, 148, 138, 255]  
     laser_color = [255, 0, 0, 255]  
-    camera_pixel_color = [0, 255, 0, 255]
     
     furthest_scene_point = np.array([xmax, ymax, zmax])
     furthest_spad_point = np.array([-params['camera_FOV'] / 2, -params['camera_FOV'], 0])
@@ -131,30 +125,24 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     
     
     if not hide_walls: 
-        # Create walls and ceiling
         back_wall = create_wall_mesh(np.array([xmin, ymax, 0]),
                                     np.array([xmax - xmin, 0, 0]),
-                                    np.array([0, 0, zmax]),
-                                    back_color)
+                                    np.array([0, 0, zmax]))
         right_wall = create_wall_mesh(np.array([xmax, ymax, 0]),
                                     np.array([0, -ymax, 0]),
-                                    np.array([0, 0, zmax]),
-                                    right_color)
+                                    np.array([0, 0, zmax]))
         left_wall = create_wall_mesh(np.array([xmin, ymax, 0]),
                                     np.array([0, -ymax, 0]),
-                                    np.array([0, 0, zmax]),
-                                    left_color)
+                                    np.array([0, 0, zmax]))
         ceiling = create_wall_mesh(np.array([xmin, ymax, zmax]),
                                 np.array([xmax - xmin, 0, 0]),
-                                np.array([0, -ymax, 0]),
-                                ceiling_color)
+                                np.array([0, -ymax, 0]))
         
         # Add walls to objects list
         objects.extend([back_wall, right_wall, left_wall, ceiling])
         
     x_start = xmin       
     x_end = 0       
-    y_pos = ymin        
     z_start = zmin     
     z_end = zmax        
     
@@ -185,7 +173,6 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         angle = obj_data['angle']
         angle_2 = obj_data['angle_2']
         v1 = np.array([xcoord, ycoord, zcoord])
-        u = np.array([1, 0, 0])
         theta = angle
         
         if uploaded_objs and obj_file.startswith("uploaded_"):
@@ -221,6 +208,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         scene_objects.append(obj)
 
     objects.extend(scene_objects)
+    
     # Create the scene and add all meshes
     scene = trimesh.Scene()
     scene.add_geometry(objects)
@@ -265,13 +253,10 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     # Obtener triángulos y normales
     triangles = combined_mesh.triangles
     triangle_normals = combined_mesh.face_normals
-    num_triangles = len(triangles)
     
-     # Inicializar el vector de mediciones
-    num_pixels = params['cam_pixel_dim'] ** 2
     num_bins = params['num_time_bins']
-
-    # Crear el vector de medición
+    
+    # Inicializar el vector de mediciones
     y_meas_vec = np.zeros(cam_pixel.shape[0])
 
     fourpi = 4 * np.pi * np.pi
@@ -421,7 +406,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         name='Occluding Wall',
         showlegend=False
     ))
-
+    
     fig3d.update_layout(
         scene=dict(
             xaxis_title='X',
@@ -493,9 +478,10 @@ def main():
     st.sidebar.subheader("Camera and laser parameters")
 
     camera_FOV = st.sidebar.slider("Camera FOV", 0.1, 1.0, 0.25)
-    cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 64, 32, step=1)
-    bin_size = st.sidebar.number_input("Bin Size (seconds)", value=390e-12, format="%.1e")
-    laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 500, 1000, 1000)
+    #cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 512, 32, step=1)
+    cam_pixel_dim = st.sidebar.number_input("Camera Pixel Dimension", min_value=16, max_value=512, value=64)
+    bin_size = st.sidebar.number_input("Bin Size (seconds)", min_value=1e-12, max_value=1e-6, value=3.9e-10, format="%.1e")
+    laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 250, 1000, 1000)
     add_noise = st.sidebar.checkbox("Add Noise", value=False)
     if add_noise: 
         SNR_dB = st.sidebar.slider("SNR (dB)", 5, 30, 20)
@@ -538,16 +524,16 @@ def main():
     for obj_file in selected_obj_files:
         with st.sidebar.expander(f"Position for {obj_file}"):
             st.markdown(''':red[Take into account the dimensions of the room]''')
-            xcoord = st.number_input(f"{obj_file} X Coordinate", value=0.0, key=f"x_{obj_file}")
-            ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, key=f"y_{obj_file}")
-            zcoord = st.number_input(f"{obj_file} Z Coordinate", value=0.0, key=f"z_{obj_file}")
+            xcoord = st.number_input(f"{obj_file} X Coordinate", value=0.0, min_value=-9.9, max_value=9.9, key=f"x_{obj_file}")
+            ycoord = st.number_input(f"{obj_file} Y Coordinate", value=1.25, min_value=0.0, max_value=9.9, key=f"y_{obj_file}")
+            zcoord = st.number_input(f"{obj_file} Z Coordinate", value=0.0, min_value=0.0, max_value=9.9, key=f"z_{obj_file}")
             v1 = np.array([xcoord, ycoord, zcoord])
             u = np.array([1, 0, 0])
             theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
             angle = st.number_input(f"{obj_file} Pitch (radians)", value=theta, key=f"theta_{obj_file}")
             angle_2 = st.number_input(f"{obj_file} Yaw (radians)", value=1.5708, key=f"zangle_{obj_file}")
 
-            w = st.slider(f"{obj_file} Size", 0.1, 5.0, 0.5, key=f"w_{obj_file}")
+            w = st.slider(f"{obj_file} Size", 0.01, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({
                 'obj_file': obj_file,
                 'xcoord': xcoord,
@@ -588,7 +574,7 @@ def main():
             obj = trimesh.load(obj_path, force='mesh')
 
         obj_extents = obj.extents
-        scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
+        scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]
         scale_factor = min(scale_factors) 
         obj.apply_scale(scale_factor)
         rotation = rotation_matrix(angle_2, [1, 0, 0])
@@ -615,21 +601,22 @@ def main():
         max_y = y + w / 2
         min_z = obj.vertices[:, 2].min()
         max_z = min_z + w * 1.1  
-
-        # Check if the object exceeds the room boundaries
-        if min_x < xmin or max_x > xmax:
-            st.error(f"**{obj_file}** exceeds the room boundaries along the X-axis.")
-            exceeds = True
-        if min_y < ymin or max_y > ymax:
-            st.error(f"**{obj_file}** exceeds the room boundaries along the Y-axis.")
-            exceeds = True
-        if max_z > zmax:
-            st.error(f"**{obj_file}** exceeds the room boundaries along the Z-axis.")
-            exceeds = True
-            
-        if exceeds:
-            st.error("Please adjust the size or position of the objects to fit within the room.")
-            st.stop()  # Detener la ejecución para prevenir la simulación
+        
+        if not hide_walls:
+            # Check if the object exceeds the room boundaries
+            if min_x < xmin or max_x > xmax:
+                st.error(f"**{obj_file}** exceeds the room boundaries along the X-axis.")
+                exceeds = True
+            if min_y < ymin or max_y > ymax:
+                st.error(f"**{obj_file}** exceeds the room boundaries along the Y-axis.")
+                exceeds = True
+            if max_z > zmax:
+                st.error(f"**{obj_file}** exceeds the room boundaries along the Z-axis.")
+                exceeds = True
+                
+            if exceeds:
+                st.error("Please adjust the size or position of the objects to fit within the room.")
+                st.stop()  # Detener la ejecución para prevenir la simulación
         
     def validate_object_positions(object_positions):
         required_keys = {'obj_file', 'xcoord', 'ycoord', 'zcoord', 'w'}
@@ -682,26 +669,34 @@ def main():
     # Compute the Time-Integrated Intensity
     y_sum = np.sum(y_meas_vec, axis=2)
     y_sum = np.roll(y_sum, shift=1, axis=-1)
+    
+    origin_x = y_sum.shape[1] // 2
+    origin_y = y_sum.shape[0] - 1
+    
+    adjusted_x = np.arange(y_sum.shape[1]) - origin_x  
+    adjusted_y = np.arange(y_sum.shape[0]) - origin_y
 
     # Create the Time-Integrated Intensity Plotly heatmap
     fig_intensity = go.Figure(data=go.Heatmap(
+        x=adjusted_x,
+        y=adjusted_y,
         z=y_sum,
         colorscale='Viridis',
-        colorbar=dict(title='Intensity', tickfont=dict(color='white'), titlefont=dict(color='white')),
+        colorbar=dict(title='Intensidad', tickfont=dict(color='black'), titlefont=dict(color='black')),
         
     ))
     
     fig_intensity.update_layout(
-        title='Time-Integrated Intensity',
-        title_font=dict(color='white'),
-        xaxis_title='Pixel X',
-        xaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white')),
-        yaxis_title='Pixel Y',
-        yaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  # Ensure square pixels
-        plot_bgcolor='#0e1017',
-        paper_bgcolor='#0e1017',
+        title='Intensidad integrada en el tiempo',
+        title_font=dict(color='black'),
+        xaxis_title='Píxel X',
+        xaxis=dict(titlefont=dict(color='black'), tickfont=dict(color='black')),
+        yaxis_title='Píxel Y',
+        yaxis=dict(titlefont=dict(color='black'), tickfont=dict(color='black'), scaleanchor="x", scaleratio=1),  
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
     )
-        
+    #0e1017
     col1, col2 = st.columns(2)
     
     with col1:
@@ -711,15 +706,15 @@ def main():
             click_event=True,
             hover_event=False,
             select_event=False,
-            override_height=400,
+            override_height=450,
             override_width="100%"  
         )
 
     # Update selected pixel based on click
     if selected_points:
         point = selected_points[0]
-        pixel_x = int(point['x'])
-        pixel_y = int(point['y'])
+        pixel_x = int(point['x']) + origin_x
+        pixel_y = int(point['y']) + origin_y
         st.session_state['pixel_x'] = pixel_x
         st.session_state['pixel_y'] = pixel_y
     else:
@@ -730,43 +725,81 @@ def main():
     # Get the temporal response for the selected pixel
     y_meas_vec_shifted = np.roll(y_meas_vec, shift=1, axis=1)
     temporal_response = y_meas_vec_shifted[pixel_y, pixel_x, :]
-
+    time_axis = np.arange(len(temporal_response)) * params['bin_size']
     # Create the Temporal Response Plotly line plot
     fig_temporal =  go.Figure(data=go.Scatter(
+        x=time_axis,
         y=temporal_response,
         mode='lines'
     ))
                                      
     fig_temporal.update_layout(
         
-        title=f'Temporal Response at Pixel ({pixel_x}, {pixel_y})',
-        xaxis_title='Time Bin',
-        yaxis_title='Intensity'
+        title=f'Respuesta temporal en el píxel ({pixel_x}, {pixel_y})',
+        xaxis_title='Intervalo de tiempo',
+        yaxis_title='Intensidad'
     )
     
     with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
+        
+    st.write(f"Valores máximos de y_meas_vec: {np.max(y_meas_vec)}")
+    st.write(f"Valores mínimos de y_meas_vec: {np.min(y_meas_vec)}")
+    st.write(f"Índice del valor máximo: {np.unravel_index(np.argmax(y_meas_vec), y_meas_vec.shape)}")
 
+        
+    def get_photon_arrival_time(y_meas_vec, pixel_x, pixel_y, bin_size):
+        # Obtener la respuesta temporal para el píxel seleccionado
+        temporal_response = y_meas_vec[pixel_y, pixel_x, :]        
+        # Encontrar el índice de la máxima intensidad en la respuesta temporal
+        measured_bin = np.argmax(temporal_response)
+        measured_time = measured_bin * bin_size
+        
+        return measured_bin
 
-    st.markdown("### Download Transient Measurements")
+    def validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size):
+        # Calcular la distancia euclidiana
+        distance = np.linalg.norm(np.array(object_pos) - np.array(laser_pos))
+        
+        # Calcular el tiempo teórico de vuelo (ToF)
+        tof_theoretical = 2 * distance / c  
 
-    # Download as .mat file
-    mat_buffer = save_to_mat(y_meas_vec, params)
-    st.download_button(
-        label="Download as .mat",
-        data=mat_buffer,
-        file_name="transient_measurements.mat",
-        mime="application/octet-stream"
-    )
+        # Mostrar resultados
+        st.write(f"**Bin size:** {bin_size}")
+        st.write(f"**Posicion del objeto:** {object_pos}")
+        st.write(f"**Distancia Euclidiana (m):** {distance:.4f}")
+        st.write(f"**Tiempo Teórico de Vuelo (s):** {tof_theoretical:.4e}")
+        st.write(f"**Tiempo Registrado (s):** {measured_time:.4e}")
+        st.write(f"**Dif (s):** {abs(tof_theoretical - measured_time)}")
 
-    # Download as .raw file
-    raw_buffer = save_to_raw(y_meas_vec)
-    st.download_button(
-        label="Download as .raw",
-        data=raw_buffer,
-        file_name="transient_measurements.raw",
-        mime="application/octet-stream"
-    )
+        # Validación
+        if abs(tof_theoretical - measured_time) <= bin_size:
+            st.success("✅ La simulación es precisa: el tiempo registrado coincide con el teórico.")
+        else:
+            st.error("❌ La simulación no es precisa: el tiempo registrado no coincide con el teórico.")
+
+    if 'y_meas_vec' in st.session_state:
+        laser_pos = params['laser_pos']
+
+        if len(object_positions) == 0:
+            st.error("No hay objetos en la escena")
+            st.stop()
+        else:
+            object = object_positions[0]
+            object_pos = [object['xcoord'], object['ycoord'], object['zcoord']]
+
+        pixel_x = st.session_state.get('pixel_x', cam_pixel_dim // 2)
+        pixel_y = st.session_state.get('pixel_y', cam_pixel_dim // 2)
+
+        bin_size = params['bin_size']
+        c = params['c']
+
+        # Obtener el tiempo de llegada del fotón registrado
+        measured_time = get_photon_arrival_time(y_meas_vec_shifted, pixel_x, pixel_y, bin_size)
+
+        # Validar la simulación
+        validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size)
 
 if __name__ == "__main__":
     main()
+
