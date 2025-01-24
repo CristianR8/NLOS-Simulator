@@ -36,7 +36,7 @@ def create_wall_mesh(origin, u_vec, v_vec):
     # Calculate rotation to align wall
     normal = np.cross(u_vec, v_vec)
     normal = normal / np.linalg.norm(normal)
-    y_axis = np.array([0, 1, 0])  # Y-axis
+    y_axis = np.array([0, 1, 0])  
     rotation_axis = np.cross(y_axis, normal)
     rotation_angle = np.arccos(np.clip(np.dot(y_axis, normal), -1.0, 1.0))
     if np.linalg.norm(rotation_axis) > 0:
@@ -50,23 +50,23 @@ def create_wall_mesh(origin, u_vec, v_vec):
 
 def create_sparse_wall(origin, width_vec, height_vec, color, sphere_radius, spacing):
     """
-    Crea una pared escasa compuesta por esferas distribuidas en una cuadrícula.
+
     
-    :param origin: Vector de origen de la pared (esquina inferior izquierda).
-    :param width_vec: Vector que define la anchura de la pared.
-    :param height_vec: Vector que define la altura de la pared.
-    :param color: Color de las esferas.
-    :param sphere_radius: Radio de cada esfera.
-    :param spacing: Espaciado entre las esferas.
-    :return: Lista de esferas (Trimesh meshes).
+    :param origin: Wall origin vector (lower left corner).
+    :param width_vec: Vector defining the width of the wall.
+    :param height_vec: Vector defining the height of the wall.
+    :param color: Color of the spheres.
+    :param sphere_radius: Radius of each sphere.
+    :param spacing: Spacing between the spheres.
+    :return: List of spheres (Trimesh meshes).
     """
     wall_spheres = []
     
-    # Calcular el número de esferas en cada dimensión
+    # Calculate the number of spheres in each dimension
     num_x = int(np.linalg.norm(width_vec) // spacing)
     num_z = int(np.linalg.norm(height_vec) // spacing)
     
-    # Vectores unitarios para iterar
+    # Unit vectors to iterate
     unit_width = width_vec / np.linalg.norm(width_vec)
     unit_height = height_vec / np.linalg.norm(height_vec)
     
@@ -107,13 +107,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         'wall_discr': wall_discr,
     }
     
-    # Define colors for the scene elements
-    right_color = [86, 101, 115, 255] 
-    left_color = [128, 139, 150, 255]  
-    back_color = [40, 55, 71, 255]  
-    ceiling_color = [52, 73, 94, 255]  
-    object_color = [241, 148, 138, 255]  
-    laser_color = [255, 0, 0, 255]  
+    # Define colors for the scene elements 
     
     furthest_scene_point = np.array([xmax, ymax, zmax])
     furthest_spad_point = np.array([-params['camera_FOV'] / 2, -params['camera_FOV'], 0])
@@ -170,10 +164,11 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         ycoord = obj_data['ycoord']
         zcoord = obj_data['zcoord']
         w = obj_data['w']
-        angle = obj_data['angle']
-        angle_2 = obj_data['angle_2']
+        yaw = obj_data['yaw']
+        pitch = obj_data['pitch']
+        roll = obj_data['roll']
         v1 = np.array([xcoord, ycoord, zcoord])
-        theta = angle
+        theta = yaw
         
         if uploaded_objs and obj_file.startswith("uploaded_"):
             # Handle uploaded file
@@ -195,15 +190,15 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         obj.apply_scale(scale_factor)
         
         # Apply rotations and translations
-        rotation = rotation_matrix(angle_2, [1, 0, 0])
+        rotation = rotation_matrix(pitch, [1, 0, 0])
         obj.apply_transform(rotation)
+        rotation_roll = rotation_matrix(roll, [0, 1, 0])
+        obj.apply_transform(rotation_roll)
         rotation_z = rotation_matrix(theta, [0, 0, 1])
         obj.apply_transform(rotation_z)
-        
         z_min = obj.vertices[:, 2].min()
         obj.apply_translation([0,0, -z_min])
         obj.apply_translation(v1)
-        obj.visual.vertex_colors = object_color 
     
         scene_objects.append(obj)
 
@@ -220,10 +215,9 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     # Add the laser position as a sphere
     laser_sphere = trimesh.creation.icosphere(radius=0.04)
     laser_sphere.apply_translation(laser_pos)
-    laser_sphere.visual.vertex_colors = laser_color
     scene.add_geometry(laser_sphere)
     
-    # Agregar los píxeles de la cámara
+    # Add camera pixels
     cam_pixel_dim = params['cam_pixel_dim']
     pixel_x = np.linspace(
         params['camera_FOV_center'][0] - params['camera_FOV'] / 2 + params['camera_FOV'] / (2 * cam_pixel_dim),
@@ -247,24 +241,24 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     X, Y, T = np.meshgrid(pixel_x, pixel_y, pixel_t)
     cam_pixel = np.vstack([X.ravel(), Y.ravel(), T.ravel()]).T
     
-    # Combinar las mallas y crear el intersector de rayos
+    # Combine the meshes and create the ray intersector.
     combined_mesh = trimesh.util.concatenate(objects)
 
-    # Obtener triángulos y normales
+    # Obtain triangles and normals
     triangles = combined_mesh.triangles
     triangle_normals = combined_mesh.face_normals
     
     num_bins = params['num_time_bins']
     
-    # Inicializar el vector de mediciones
+    # Initialize the measurement vector
     y_meas_vec = np.zeros(cam_pixel.shape[0])
 
     fourpi = 4 * np.pi * np.pi
     floor_normal = np.array([0, 0, 1])
 
-    # Iterar sobre cada triángulo de la malla
+    # Iterate over each triangle of the mesh
     for idx in range(len(triangles)):
-        # Obtener el triángulo y su normal
+        # Obtain the triangle and its normal
         triangle = triangles[idx]
         normal = triangle_normals[idx]
         area = 0.5 * np.linalg.norm(np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0]))
@@ -303,13 +297,13 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], num_bins), order='F')
 
     if add_noise:
-        # Añadir ruido ambiental
+        # Add ambient noise
         y_with_background = add_background_noise(y_meas_vec, sbr=SBR)
             
-        # Añadir ruido de disparo (shot noise)
+        # Add shot noise
         y_with_shot_noise = add_poisson_noise(y_with_background, scale_factor=poisson_scale_factor)
             
-        # Añadir ruido de sensor
+        # Add sensor noise
         y_with_sensor_noise = add_sensor_noise(y_with_shot_noise, SNR_dB)
 
         y_meas_vec_noisy = y_with_sensor_noise
@@ -478,9 +472,8 @@ def main():
     st.sidebar.subheader("Camera and laser parameters")
 
     camera_FOV = st.sidebar.slider("Camera FOV", 0.1, 1.0, 0.25)
-    #cam_pixel_dim = st.sidebar.slider("Camera Pixel Dimension", 16, 512, 32, step=1)
     cam_pixel_dim = st.sidebar.number_input("Camera Pixel Dimension", min_value=16, max_value=512, value=64)
-    bin_size = st.sidebar.number_input("Bin Size (seconds)", min_value=1e-12, max_value=1e-6, value=3.9e-10, format="%.1e")
+    bin_size = st.sidebar.number_input("Bin Size (seconds)", min_value=1e-12, max_value=1e-3, value=3.9e-10, format="%.1e")
     laser_intensity = st.sidebar.slider("Laser Intensity (mW)", 250, 1000, 1000)
     add_noise = st.sidebar.checkbox("Add Noise", value=False)
     if add_noise: 
@@ -530,8 +523,10 @@ def main():
             v1 = np.array([xcoord, ycoord, zcoord])
             u = np.array([1, 0, 0])
             theta = -np.clip(np.dot(u, v1) / (np.linalg.norm(u) * np.linalg.norm(v1)), -1, 1)
-            angle = st.number_input(f"{obj_file} Pitch (radians)", value=theta, key=f"theta_{obj_file}")
-            angle_2 = st.number_input(f"{obj_file} Yaw (radians)", value=1.5708, key=f"zangle_{obj_file}")
+            pitch = st.number_input(f"{obj_file} Pitch (radians)", value=1.5708, key=f"zangle_{obj_file}")
+            roll = st.number_input(f"{obj_file} Roll (radians)", value=0.0, key=f"roll_{obj_file}")
+            yaw = st.number_input(f"{obj_file} Yaw (radians)", value=theta, key=f"theta_{obj_file}")
+            
 
             w = st.slider(f"{obj_file} Size", 0.01, 5.0, 0.5, key=f"w_{obj_file}")
             object_positions.append({
@@ -540,8 +535,10 @@ def main():
                 'ycoord': ycoord,
                 'zcoord': zcoord,
                 'w': w,
-                'angle': angle,
-                'angle_2': angle_2
+                'pitch': pitch,  
+                'roll': roll, 
+                'yaw': yaw,  
+                 
             })
             
     if selected_obj_files:
@@ -557,9 +554,7 @@ def main():
         x = obj['xcoord']
         y = obj['ycoord']
         zcoord = obj['zcoord']
-        w = obj['w']
-        angle = obj['angle']
-        angle_2 = obj['angle_2']
+        w = obj['w']    
         
         if uploaded_objs and obj_file.startswith("uploaded_"):
             # Handle uploaded file
@@ -577,9 +572,11 @@ def main():
         scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]
         scale_factor = min(scale_factors) 
         obj.apply_scale(scale_factor)
-        rotation = rotation_matrix(angle_2, [1, 0, 0])
+        rotation = rotation_matrix(pitch, [1, 0, 0])
         obj.apply_transform(rotation)
-        rotation_z = rotation_matrix(angle, [0, 0, 1])
+        rotation_roll = rotation_matrix(roll, [0, 1, 0])
+        obj.apply_transform(rotation_roll)
+        rotation_z = rotation_matrix(yaw, [0, 0, 1])
         obj.apply_transform(rotation_z)
         z_min = obj.vertices[:, 2].min()
         obj.apply_translation([0,0, -z_min])
@@ -643,12 +640,16 @@ def main():
     if st.sidebar.button("Run simulation"):
         fig3d, y_meas_vec, params = simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, laser_intensity, object_positions, hide_walls, SNR_dB, SBR, poisson_scale_factor, add_noise, uploaded_objs=uploaded_objs)
 
+        y_sum = np.sum(y_meas_vec, axis=2)
+        y_sum = np.roll(y_sum, shift=1, axis=-1)
+        origin_x = y_sum.shape[1] // 2
+        origin_y = y_sum.shape[0] - 1
         # Store data in session state
         st.session_state['y_meas_vec'] = y_meas_vec
         st.session_state['fig3d'] = fig3d
         st.session_state['params'] = params
-        st.session_state['pixel_x'] = cam_pixel_dim // 2
-        st.session_state['pixel_y'] = cam_pixel_dim // 2
+        st.session_state['pixel_x'] = origin_x
+        st.session_state['pixel_y'] = origin_y
 
     # Retrieve data from session state
     if 'y_meas_vec' in st.session_state and 'fig3d' in st.session_state:
@@ -696,7 +697,7 @@ def main():
         plot_bgcolor='#ffffff',
         paper_bgcolor='#ffffff',
     )
-    #0e1017
+    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -719,13 +720,14 @@ def main():
         st.session_state['pixel_y'] = pixel_y
     else:
         # Default pixel selection at the center if no click event
-        pixel_x = st.session_state.get('pixel_x', cam_pixel_dim // 2)
-        pixel_y = st.session_state.get('pixel_y', cam_pixel_dim // 2)
-
+        pixel_x = st.session_state.get('pixel_x', origin_x)
+        pixel_y = st.session_state.get('pixel_y', origin_y)
+    
     # Get the temporal response for the selected pixel
     y_meas_vec_shifted = np.roll(y_meas_vec, shift=1, axis=1)
     temporal_response = y_meas_vec_shifted[pixel_y, pixel_x, :]
     time_axis = np.arange(len(temporal_response)) * params['bin_size']
+    
     # Create the Temporal Response Plotly line plot
     fig_temporal =  go.Figure(data=go.Scatter(
         x=time_axis,
@@ -735,70 +737,13 @@ def main():
                                      
     fig_temporal.update_layout(
         
-        title=f'Respuesta temporal en el píxel ({pixel_x}, {pixel_y})',
+        title=f'Respuesta temporal en el píxel ({pixel_x - origin_x}, {pixel_y - origin_y})',
         xaxis_title='Intervalo de tiempo',
         yaxis_title='Intensidad'
     )
     
     with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
-        
-    st.write(f"Valores máximos de y_meas_vec: {np.max(y_meas_vec)}")
-    st.write(f"Valores mínimos de y_meas_vec: {np.min(y_meas_vec)}")
-    st.write(f"Índice del valor máximo: {np.unravel_index(np.argmax(y_meas_vec), y_meas_vec.shape)}")
-
-        
-    def get_photon_arrival_time(y_meas_vec, pixel_x, pixel_y, bin_size):
-        # Obtener la respuesta temporal para el píxel seleccionado
-        temporal_response = y_meas_vec[pixel_y, pixel_x, :]        
-        # Encontrar el índice de la máxima intensidad en la respuesta temporal
-        measured_bin = np.argmax(temporal_response)
-        measured_time = measured_bin * bin_size
-        
-        return measured_bin
-
-    def validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size):
-        # Calcular la distancia euclidiana
-        distance = np.linalg.norm(np.array(object_pos) - np.array(laser_pos))
-        
-        # Calcular el tiempo teórico de vuelo (ToF)
-        tof_theoretical = 2 * distance / c  
-
-        # Mostrar resultados
-        st.write(f"**Bin size:** {bin_size}")
-        st.write(f"**Posicion del objeto:** {object_pos}")
-        st.write(f"**Distancia Euclidiana (m):** {distance:.4f}")
-        st.write(f"**Tiempo Teórico de Vuelo (s):** {tof_theoretical:.4e}")
-        st.write(f"**Tiempo Registrado (s):** {measured_time:.4e}")
-        st.write(f"**Dif (s):** {abs(tof_theoretical - measured_time)}")
-
-        # Validación
-        if abs(tof_theoretical - measured_time) <= bin_size:
-            st.success("✅ La simulación es precisa: el tiempo registrado coincide con el teórico.")
-        else:
-            st.error("❌ La simulación no es precisa: el tiempo registrado no coincide con el teórico.")
-
-    if 'y_meas_vec' in st.session_state:
-        laser_pos = params['laser_pos']
-
-        if len(object_positions) == 0:
-            st.error("No hay objetos en la escena")
-            st.stop()
-        else:
-            object = object_positions[0]
-            object_pos = [object['xcoord'], object['ycoord'], object['zcoord']]
-
-        pixel_x = st.session_state.get('pixel_x', cam_pixel_dim // 2)
-        pixel_y = st.session_state.get('pixel_y', cam_pixel_dim // 2)
-
-        bin_size = params['bin_size']
-        c = params['c']
-
-        # Obtener el tiempo de llegada del fotón registrado
-        measured_time = get_photon_arrival_time(y_meas_vec_shifted, pixel_x, pixel_y, bin_size)
-
-        # Validar la simulación
-        validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size)
 
 if __name__ == "__main__":
     main()
