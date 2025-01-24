@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
 from save import save_to_mat, save_to_raw
+from frames import create_animated_heatmap
 
 c = 299792458
 
@@ -592,12 +593,13 @@ def main():
             'mesh': obj
         })
         # Calculate object boundaries based on its center and width
-        min_x = x - w / 2
-        max_x = x + w / 2
-        min_y = y - w / 2
-        max_y = y + w / 2
-        min_z = obj.vertices[:, 2].min()
-        max_z = min_z + w * 1.1  
+        bounds = obj.bounds
+        min_x, min_y, min_z = bounds[0]
+        max_x, max_y, max_z = bounds[1]
+        #min_z = obj.vertices[:, 2].min()
+        #max_z = min_z + w * 1.1  
+        
+        exceeds = False
         
         if not hide_walls:
             # Check if the object exceeds the room boundaries
@@ -744,6 +746,22 @@ def main():
     
     with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
+        
+
+    st.markdown("### Animación de Intensidad Integrada en el Tiempo")
+    fig_cumulative = create_animated_heatmap(
+        y_meas_vec_shifted, 
+        params['cam_pixel_dim'], 
+        params['num_time_bins'], 
+        params['bin_size'],
+        adjusted_x,
+        adjusted_y
+    )
+    
+    col_a, col_b, col_c = st.columns([1, 2, 1])  
+    
+    with col_b:
+        st.plotly_chart(fig_cumulative, use_container_width=False)
 
 if __name__ == "__main__":
     main()
