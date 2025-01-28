@@ -66,4 +66,5 @@ def create_animated_heatmap(y_meas_vec, cam_pixel_dim, num_bins, bin_size, adjus
         )
     )
     
+    
     return fig
