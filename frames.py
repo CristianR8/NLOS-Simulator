@@ -88,7 +88,7 @@ def create_animated_heatmap(y_meas_vec, cam_pixel_dim, num_bins, bin_size, adjus
                 y=adjusted_y,
                 z=z,
                 colorscale='Viridis',
-                colorbar=dict(title='Intensidad', tickfont=dict(color='black'), titlefont=dict(color='black')),
+                colorbar=dict(title='Intensidad', tickfont=dict(color='black'))),
             ),
             name=f'Frame {t}'
         )

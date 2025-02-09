@@ -674,7 +674,7 @@ def main():
         y=adjusted_y,
         z=y_sum,
         colorscale='Viridis',
-        colorbar=dict(title='Intensidad', tickfont=dict(color='black'), titlefont=dict(color='black')),
+        colorbar=dict(title='Intensidad', tickfont=dict(color='black'), titlefont=dict(color='white')),
         
     ))
     
