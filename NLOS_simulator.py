@@ -11,7 +11,6 @@ import plotly.graph_objects as go
 from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
 from save import save_to_mat, save_to_raw
-from frames import create_animated_heatmap, per_frame_heatmap, plot_temporal_response
 
 c = 299792458
 
