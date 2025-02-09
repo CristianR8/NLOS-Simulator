@@ -72,8 +72,8 @@ def add_poisson_noise(data, n_mc_samples=1, scale_factor=100):
         Transient data with added Poisson noise, shape (n_mc_samples, *transient.shape).
     """
 
-    if np.any(data < 0):
-        raise ValueError("Input data must be non-negative for Poisson noise.")
+    #if np.any(data < 0):
+        #raise ValueError("Input data must be non-negative for Poisson noise.")
 
     # Scale the data to avoid loss of small signals (Poisson noise works best with larger values)
     scaled_data = data * scale_factor

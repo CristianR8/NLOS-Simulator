@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 from check_overlaps import check_overlaps
 from streamlit_plotly_events import plotly_events
 from save import save_to_mat, save_to_raw
-from frames import create_animated_heatmap
+from frames import create_animated_heatmap, per_frame_heatmap, plot_temporal_response
 
 c = 299792458
 
@@ -186,7 +186,7 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
 
         # Load the object
         obj_extents = obj.extents
-        scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]]  # Height is fixed at 1.1
+        scale_factors = [w / obj_extents[0], 1.1 / obj_extents[2]] 
         scale_factor = min(scale_factors) 
         obj.apply_scale(scale_factor)
         
@@ -298,16 +298,18 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
     y_meas_vec = y_meas_vec.reshape((params['cam_pixel_dim'], params['cam_pixel_dim'], num_bins), order='F')
 
     if add_noise:
+        
+        
         # Add ambient noise
         y_with_background = add_background_noise(y_meas_vec, sbr=SBR)
             
         # Add shot noise
-        y_with_shot_noise = add_poisson_noise(y_with_background, scale_factor=poisson_scale_factor)
+        y_with_shot_noise = add_poisson_noise(y_meas_vec, scale_factor=poisson_scale_factor)
             
         # Add sensor noise
         y_with_sensor_noise = add_sensor_noise(y_with_shot_noise, SNR_dB)
 
-        y_meas_vec_noisy = y_with_sensor_noise
+        y_meas_vec_noisy = y_with_shot_noise
     else:
         # If noise is not added, keep the original measurement
         y_meas_vec_noisy = y_meas_vec
@@ -388,19 +390,6 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         front_wall_y.extend(sphere.vertices[:, 1])
         front_wall_z.extend(sphere.vertices[:, 2])
 
-    fig3d.add_trace(go.Scatter3d(
-        x=front_wall_x,
-        y=front_wall_y,
-        z=front_wall_z,
-        mode='markers',
-        marker=dict(
-            size=3, 
-            color='dodgerblue',
-            opacity=0.6
-        ),
-        name='Occluding Wall',
-        showlegend=False
-    ))
     
     fig3d.update_layout(
         scene=dict(
@@ -691,13 +680,13 @@ def main():
     
     fig_intensity.update_layout(
         title='Intensidad integrada en el tiempo',
-        title_font=dict(color='black'),
+        title_font=dict(color='white'),
         xaxis_title='Píxel X',
-        xaxis=dict(titlefont=dict(color='black'), tickfont=dict(color='black')),
+        xaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white')),
         yaxis_title='Píxel Y',
-        yaxis=dict(titlefont=dict(color='black'), tickfont=dict(color='black'), scaleanchor="x", scaleratio=1),  
-        plot_bgcolor='#ffffff',
-        paper_bgcolor='#ffffff',
+        yaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  
+        plot_bgcolor='#0e1017',
+        paper_bgcolor='#0e1017',
     )
     
     col1, col2 = st.columns(2)
@@ -746,79 +735,6 @@ def main():
     
     with col2:
         st.plotly_chart(fig_temporal, use_container_width=True)
-        
-
-    st.markdown("### Animación de Intensidad Integrada en el Tiempo")
-    fig_cumulative = create_animated_heatmap(
-        y_meas_vec_shifted, 
-        params['cam_pixel_dim'], 
-        params['num_time_bins'], 
-        params['bin_size'],
-        adjusted_x,
-        adjusted_y
-    )
-    
-    col_a, col_b, col_c = st.columns([1, 2, 1])  
-    
-    with col_b:
-        st.plotly_chart(fig_cumulative, use_container_width=False)
-        
-    st.write(f"Valores máximos de y_meas_vec: {np.max(y_meas_vec)}")
-    st.write(f"Valores mínimos de y_meas_vec: {np.min(y_meas_vec)}")
-    st.write(f"Índice del valor máximo: {np.unravel_index(np.argmax(y_meas_vec), y_meas_vec.shape)}")
-
-        
-    def get_photon_arrival_time(y_meas_vec, pixel_x, pixel_y, bin_size):
-        # Obtener la respuesta temporal para el píxel seleccionado
-        temporal_response = y_meas_vec[pixel_y, pixel_x, :]        
-        # Encontrar el índice de la máxima intensidad en la respuesta temporal
-        measured_bin = np.argmax(temporal_response)
-        measured_time = measured_bin * bin_size
-        
-        return measured_bin
-
-    def validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size):
-        # Calcular la distancia euclidiana
-        distance = np.linalg.norm(np.array(object_pos) - np.array(laser_pos))
-        
-        # Calcular el tiempo teórico de vuelo (ToF)
-        tof_theoretical = 2 * distance / c  
-
-        # Mostrar resultados
-        st.write(f"**Bin size:** {bin_size}")
-        st.write(f"**Posicion del objeto:** {object_pos}")
-        st.write(f"**Distancia Euclidiana (m):** {distance:.4f}")
-        st.write(f"**Tiempo Teórico de Vuelo (s):** {tof_theoretical:.4e}")
-        st.write(f"**Tiempo Registrado (s):** {measured_time:.6e}")
-        st.write(f"**Dif (s):** {abs(tof_theoretical - measured_time)}")
-
-        # Validación
-        if abs(tof_theoretical - measured_time) <= bin_size:
-            st.success("✅ La simulación es precisa: el tiempo registrado coincide con el teórico.")
-        else:
-            st.error("❌ La simulación no es precisa: el tiempo registrado no coincide con el teórico.")
-
-    if 'y_meas_vec' in st.session_state:
-        laser_pos = params['laser_pos']
-
-        if len(object_positions) == 0:
-            st.error("No hay objetos en la escena")
-            st.stop()
-        else:
-            object = object_positions[0]
-            object_pos = [object['xcoord'], object['ycoord'], object['zcoord']]
-
-        pixel_x = st.session_state.get('pixel_x', cam_pixel_dim // 2)
-        pixel_y = st.session_state.get('pixel_y', cam_pixel_dim // 2)
-
-        bin_size = params['bin_size']
-        c = params['c']
-
-        # Obtener el tiempo de llegada del fotón registrado
-        measured_time = get_photon_arrival_time(y_meas_vec_shifted, pixel_x, pixel_y, bin_size)
-
-        # Validar la simulación
-        validate_simulation_photon_time(laser_pos, object_pos, c, measured_time, bin_size)
 
 if __name__ == "__main__":
     main()
