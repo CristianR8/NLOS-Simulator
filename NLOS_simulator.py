@@ -673,7 +673,7 @@ def main():
         y=adjusted_y,
         z=y_sum,
         colorscale='Viridis',
-        colorbar=dict(title='Intensidad', tickfont=dict(color='black'), titlefont=dict(color='white')),
+        colorbar=dict(title='Intensidad', tickfont=dict(color='white'), title_font=dict(color='white')),
         
     ))
     
@@ -681,9 +681,9 @@ def main():
         title='Intensidad integrada en el tiempo',
         title_font=dict(color='white'),
         xaxis_title='Píxel X',
-        xaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white')),
+        xaxis=dict(title_font=dict(color='white'), tickfont=dict(color='white')),
         yaxis_title='Píxel Y',
-        yaxis=dict(titlefont=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  
+        yaxis=dict(title_font=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  
         plot_bgcolor='#0e1017',
         paper_bgcolor='#0e1017',
     )
