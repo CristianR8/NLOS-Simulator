@@ -389,6 +389,19 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         front_wall_y.extend(sphere.vertices[:, 1])
         front_wall_z.extend(sphere.vertices[:, 2])
 
+    fig3d.add_trace(go.Scatter3d(
+        x=front_wall_x,
+        y=front_wall_y,
+        z=front_wall_z,
+        mode='markers',
+        marker=dict(
+            size=3, 
+            color='dodgerblue',
+            opacity=0.6
+        ),
+        name='Occluding Wall',
+        showlegend=False
+    ))
     
     fig3d.update_layout(
         scene=dict(
