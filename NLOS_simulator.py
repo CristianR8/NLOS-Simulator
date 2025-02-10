@@ -701,6 +701,9 @@ def main():
         paper_bgcolor='#ffffff',
     )
     
+    st.write(f"Shape of y_sum: {y_sum.shape}")
+    st.write(f"Max value in y_sum: {y_sum.max()}")
+    
     col1, col2 = st.columns(2)
     
     with col1:
