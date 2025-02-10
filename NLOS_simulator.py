@@ -697,12 +697,7 @@ def main():
         xaxis=dict(title_font=dict(color='black'), tickfont=dict(color='black')),
         yaxis_title='Píxel Y',
         yaxis=dict(title_font=dict(color='black'), tickfont=dict(color='black'), scaleanchor="x", scaleratio=1),  
-        plot_bgcolor='#ffffff',
-        paper_bgcolor='#ffffff',
     )
-    
-    st.write(f"Shape of y_sum: {y_sum.shape}")
-    st.write(f"Max value in y_sum: {y_sum.max()}")
     
     col1, col2 = st.columns(2)
     
@@ -713,7 +708,7 @@ def main():
             click_event=True,
             hover_event=False,
             select_event=False,
-            override_height=450,
+            override_height=480,
             override_width="100%"  
         )
 
