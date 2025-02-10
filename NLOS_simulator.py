@@ -673,19 +673,19 @@ def main():
         y=adjusted_y,
         z=y_sum,
         colorscale='Viridis',
-        colorbar=dict(title='Intensidad', tickfont=dict(color='white'), title_font=dict(color='white')),
+        colorbar=dict(title='Intensidad', tickfont=dict(color='black'), title_font=dict(color='black')),
         
     ))
     
     fig_intensity.update_layout(
         title='Intensidad integrada en el tiempo',
-        title_font=dict(color='white'),
+        title_font=dict(color='black'),
         xaxis_title='Píxel X',
-        xaxis=dict(title_font=dict(color='white'), tickfont=dict(color='white')),
+        xaxis=dict(title_font=dict(color='black'), tickfont=dict(color='black')),
         yaxis_title='Píxel Y',
-        yaxis=dict(title_font=dict(color='white'), tickfont=dict(color='white'), scaleanchor="x", scaleratio=1),  
-        plot_bgcolor='#0e1017',
-        paper_bgcolor='#0e1017',
+        yaxis=dict(title_font=dict(color='black'), tickfont=dict(color='black'), scaleanchor="x", scaleratio=1),  
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
     )
     
     col1, col2 = st.columns(2)
