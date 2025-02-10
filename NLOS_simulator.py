@@ -303,12 +303,12 @@ def simulation(xmin, xmax, ymax, zmax, camera_FOV, cam_pixel_dim, bin_size, lase
         y_with_background = add_background_noise(y_meas_vec, sbr=SBR)
             
         # Add shot noise
-        y_with_shot_noise = add_poisson_noise(y_meas_vec, scale_factor=poisson_scale_factor)
+        y_with_shot_noise = add_poisson_noise(y_with_background, scale_factor=poisson_scale_factor)
             
         # Add sensor noise
         y_with_sensor_noise = add_sensor_noise(y_with_shot_noise, SNR_dB)
 
-        y_meas_vec_noisy = y_with_shot_noise
+        y_meas_vec_noisy = y_with_sensor_noise
     else:
         # If noise is not added, keep the original measurement
         y_meas_vec_noisy = y_meas_vec
