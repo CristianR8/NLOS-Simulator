@@ -1,7 +1,10 @@
-plotly
 streamlit
 numpy
 trimesh
-streamlit_plotly_events
+plotly
+streamlit-plotly-events
 scipy
-imageio
+matplotlib
+pyopengl
+networkx
+pillow
