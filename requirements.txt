@@ -1,10 +1,14 @@
-streamlit
+streamlit==1.40.1
 numpy
 trimesh
-plotly
+plotly==5.9.0
 streamlit-plotly-events
 scipy
 matplotlib
 pyopengl
 networkx
 pillow
+nbformat
+ipykernel
+anywidget
+notebook
