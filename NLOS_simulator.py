@@ -701,16 +701,16 @@ def main():
     
     col1, col2 = st.columns(2)
     
-    with col1:
+    #with col1:
         # Display the plot and capture click events
-        selected_points = plotly_events(
-            fig_intensity,
-            click_event=True,
-            hover_event=False,
-            select_event=False,
-            override_height=480,
-            override_width="100%"  
-        )
+    selected_points = plotly_events(
+        fig_intensity,
+        click_event=True,
+        hover_event=False,
+        select_event=False,
+        override_height=480,
+        override_width="100%"  
+    )
 
     # Update selected pixel based on click
     if selected_points:
