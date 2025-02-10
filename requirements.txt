@@ -1,5 +1,5 @@
 plotly
-streamlit==1.40.1
+streamlit
 numpy
 trimesh
 streamlit_plotly_events
